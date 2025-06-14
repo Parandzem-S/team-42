@@ -6,8 +6,6 @@ A comprehensive tool for processing earnings call transcripts from PDF or DOCX f
 Extracts presentation content and Q&A sections, then uses OpenAI's GPT model to 
 parse and structure the data for analysis.
 
-Author: [Your Name]
-Version: 2.0
 Date: 2025-06-14
 
 Dependencies:
