@@ -78,7 +78,7 @@ def parse_qa_section_new(qa_text: str) -> pd.DataFrame:
                 company_title = title_line[:-2].strip()
                 
                 # Extract company
-                company = extract_company_name_simple(company_title)
+                company = extract_company_name(company_title)
                 
                 # Determine question number and type
                 if qa_marker == 'Q':
@@ -128,38 +128,6 @@ def parse_qa_section_new(qa_text: str) -> pd.DataFrame:
     
     return pd.DataFrame(qa_data)
 
-def extract_company_name_simple(company_title: str) -> str:
-    """Simple company name extraction"""
-    
-    if 'JPMorganChase' in company_title:
-        return 'JPMorgan Chase'
-    elif 'Autonomous Research' in company_title:
-        return 'Autonomous Research'
-    elif 'UBS Securities' in company_title:
-        return 'UBS'
-    elif 'Deutsche Bank' in company_title:
-        return 'Deutsche Bank'
-    elif 'Wells Fargo' in company_title or 'Well Fargo' in company_title:
-        return 'Wells Fargo Securities'
-    elif 'Morgan Stanley' in company_title:
-        return 'Morgan Stanley'
-    elif 'RBC Capital' in company_title:
-        return 'RBC Capital Markets'
-    elif 'Bank of America' in company_title:
-        return 'Bank of America'
-    elif 'Evercore' in company_title:
-        return 'Evercore'
-    elif 'HSBC' in company_title:
-        return 'HSBC'
-    elif 'Truist' in company_title:
-        return 'Truist Securities'
-    elif 'Wolfe Research' in company_title:
-        return 'Wolfe Research'
-    elif 'Seaport' in company_title:
-        return 'Seaport Global Securities'
-    else:
-        return company_title
-
 def is_speaker_name(text: str) -> bool:
     """Check if text looks like a speaker name"""
     if not text or len(text) < 3:
@@ -201,54 +169,40 @@ def extract_company_name(company_title: str) -> str:
     
     # Common company mappings
     company_mappings = {
-        'JPMorganChase': 'JPMorgan Chase',
-        'Autonomous Research': 'Autonomous Research',
-        'UBS Securities LLC': 'UBS',
+        "JPMorganChase": "JPMorgan Chase",
+        "JPMorgan Chase": "JPMorgan Chase",
+        "Autonomous": "Autonomous Research",
+        'Autonomous Research': 'Autonomous Research',         
+        "UBS": "UBS",
+        'UBS Securities LLC': 'UBS',        
+		"Deutsche Bank": "Deutsche Bank",
+        "Wells Fargo" : "Wells Fargo Securities",
+        'Wells Fargo Securities LLC': 'Wells Fargo Securities',        
+		"Well Fargo": "Wells Fargo Securities",
+        "Morgan Stanley": "Morgan Stanley",
+        'Morgan Stanley & Co. LLC': 'Morgan Stanley',        
+		"RBC": "RBC Capital Markets",
+        'RBC Capital Markets LLC': 'RBC Capital Markets',        
+		"Bank of America": "Bank of America",
+        'Bank of America Merrill Lynch': 'Bank of America',        
+		"Evercore":"Evercore",
+        'Evercore Group LLC': 'Evercore',        
+		"HSBC":"HSBC",
+        'HSBC Securities (USA), Inc.': 'HSBC',        
+		"Truist":"Truist Securities",
+        "Wolfe":"Wolfe Research",
+        "Seaport":"Seaport Global Securities",
+        'Seaport Global Securities LLC': 'Seaport Global Securities',
         'Truist Securities Inc.': 'Truist Securities',
         'Deutsche Bank Securities, Inc.': 'Deutsche Bank',
-        'Wolfe Research LLC': 'Wolfe Research',
-        'RBC Capital Markets LLC': 'RBC Capital Markets',
-        'Bank of America Merrill Lynch': 'Bank of America',
-        'Seaport Global Securities LLC': 'Seaport Global Securities',
-        'Morgan Stanley & Co. LLC': 'Morgan Stanley',
-        'Wells Fargo Securities LLC': 'Wells Fargo Securities',
-        'Evercore Group LLC': 'Evercore',
-        'HSBC Securities (USA), Inc.': 'HSBC'
+        'Wolfe Research LLC': 'Wolfe Research'
     }
     
     # Check for exact matches first
     for key, value in company_mappings.items():
         if key in company_title:
             return value
-    
-    # Extract company name from common patterns
-    if 'JPMorganChase' in company_title or 'JPMorgan Chase' in company_title:
-        return 'JPMorgan Chase'
-    elif 'Autonomous' in company_title:
-        return 'Autonomous Research'
-    elif 'UBS' in company_title:
-        return 'UBS'
-    elif 'Deutsche Bank' in company_title:
-        return 'Deutsche Bank'
-    elif 'Wells Fargo' in company_title or 'Well Fargo' in company_title:
-        return 'Wells Fargo Securities'
-    elif 'Morgan Stanley' in company_title:
-        return 'Morgan Stanley'
-    elif 'RBC' in company_title:
-        return 'RBC Capital Markets'
-    elif 'Bank of America' in company_title:
-        return 'Bank of America'
-    elif 'Evercore' in company_title:
-        return 'Evercore'
-    elif 'HSBC' in company_title:
-        return 'HSBC'
-    elif 'Truist' in company_title:
-        return 'Truist Securities'
-    elif 'Wolfe' in company_title:
-        return 'Wolfe Research'
-    elif 'Seaport' in company_title:
-        return 'Seaport Global Securities'
-    
+        
     return company_title.strip()
 
 def clean_text_content(text: str) -> str:
