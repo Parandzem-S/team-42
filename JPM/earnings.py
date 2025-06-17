@@ -59,17 +59,38 @@ class TranscriptProcessor:
     TEMPERATURE = 0
     MODEL_NAME = "gpt-4-turbo"
     
-    def __init__(self, api_key: Optional[str] = None):
+    def __init__(self, ticker: str, year: int, quarter: int, api_key: Optional[str] = None):
         """
         Initialize the TranscriptProcessor.
         
         Args:
+            ticker: company ticker code
+            year: year
+            quarter: number of the quarter between 1 and 4
             api_key (Optional[str]): OpenAI API key. If None, will attempt to 
                                    retrieve from environment variable.
         
         Raises:
             ValueError: If API key is not provided or found in environment.
         """
+        self.ticker = ticker.upper()
+        self.year = year
+        self.quarter = quarter
+        output_file = f"{ticker}_{year}_Q{quarter}"
+        self.output_presentation_file = f"{output_file}_presentation.txt"
+        self.output_qa_file = f"{output_file}_qa_data.xlsx"
+        # Create output directory if it doesn't exist
+        if not os.path.exists("output"):
+            os.makedirs("output")
+        self.output_dir = Path("output")
+        self.output_presentation_path = os.path.join(self.output_dir, self.output_presentation_file)
+        self.output_qa_path = os.path.join(self.output_dir, self.output_qa_file)
+        # delete and create log directory
+        if os.path.exists("logs"):
+            for file in os.listdir("logs"):
+                os.remove(os.path.join("logs", file))
+        self.log_dir = Path("logs")
+        os.makedirs(self.log_dir, exist_ok=True)
         self.api_key = api_key or os.environ.get("OPENAI_API_KEY")
         if not self.api_key:
             raise ValueError("OpenAI API key is required. Set OPENAI_API_KEY environment variable or pass it directly.")
@@ -275,7 +296,7 @@ Return only the cleaned transcript text, with no extra commentary.
 Transcript:
 {chunk}"""
     
-    def _clean_presentation_with_llm(self, text: str, output_dir: str) -> str:
+    def _clean_presentation_with_llm(self, text: str) -> str:
         """
         Clean presentation text using LLM processing in chunks.
         
@@ -285,7 +306,6 @@ Transcript:
         
         Args:
             text (str): Raw presentation text
-            output_dir (str): Directory to save debug files
             
         Returns:
             str: Cleaned presentation text
@@ -313,14 +333,10 @@ Transcript:
                 cleaned_chunks.append(cleaned_text)
                 
                 # Save debug files
-                self._save_debug_file(
-                    f"{output_dir}/cleaned_presentation_prompt_chunk_{idx}.txt", 
-                    prompt
-                )
-                self._save_debug_file(
-                    f"{output_dir}/cleaned_presentation_response_chunk_{idx}.txt", 
-                    cleaned_text
-                )
+                debug_file = f"cleaned_presentation_prompt_chunk_{idx}.txt"
+                self._save_debug_file(debug_file, prompt)
+                debug_file = f"cleaned_presentation_response_chunk_{idx}.txt"
+                self._save_debug_file(debug_file, cleaned_text)
                 
                 print(f"✅ Presentation chunk {idx}/{len(chunks)} cleaned successfully")
                 
@@ -373,14 +389,13 @@ Required JSON format:
 Transcript:
 {chunk}"""
     
-    def _process_qa_chunk(self, chunk: str, chunk_idx: int, output_dir: str) -> List[Dict]:
+    def _process_qa_chunk(self, chunk: str, chunk_idx: int) -> List[Dict]:
         """
         Process a single Q&A chunk using LLM.
         
         Args:
             chunk (str): Q&A text chunk
             chunk_idx (int): Index of the current chunk
-            output_dir (str): Directory to save debug files
             
         Returns:
             List[Dict]: Extracted Q&A entries for this chunk
@@ -388,7 +403,8 @@ Transcript:
         prompt = self._create_qa_extraction_prompt(chunk)
         
         # Save prompt for debugging
-        self._save_debug_file(f"{output_dir}/prompt_chunk_{chunk_idx}.txt", prompt)
+        debug_file = f"qa_prompt_chunk_{chunk_idx}.txt"
+        self._save_debug_file(debug_file, prompt)
         
         try:
             response = self.client.chat.completions.create(
@@ -401,7 +417,8 @@ Transcript:
             raw_response = response.choices[0].message.content.strip()
             
             # Save raw response for debugging
-            self._save_debug_file(f"{output_dir}/raw_response_chunk_{chunk_idx}.txt", raw_response)
+            debug_file = f"qa_response_chunk_{chunk_idx}.txt"
+            self._save_debug_file(debug_file, raw_response)
             
             if not raw_response:
                 print(f"⚠️  Chunk {chunk_idx} returned empty response")
@@ -424,28 +441,31 @@ Transcript:
                         
                 except json.JSONDecodeError as json_err:
                     print(f"❌ Chunk {chunk_idx} JSON parsing failed: {json_err}")
+                    debug_file = f"error_chunk_{chunk_idx}.log"
                     self._save_debug_file(
-                        f"{output_dir}/error_chunk_{chunk_idx}.log", 
+                        debug_file, 
                         f"JSON parsing error: {json_err}\n\nRaw content:\n{raw_response}"
                     )
                     return []
             else:
                 print(f"⚠️  Chunk {chunk_idx}: No valid JSON array found in response")
+                debug_file = f"error_chunk_{chunk_idx}.log"
                 self._save_debug_file(
-                    f"{output_dir}/error_chunk_{chunk_idx}.log", 
+                    debug_file, 
                     f"Missing JSON brackets\n\nRaw content:\n{raw_response}"
                 )
                 return []
                 
         except Exception as e:
             print(f"❌ Chunk {chunk_idx} processing failed: {e}")
+            debug_file = f"error_chunk_{chunk_idx}.log"
             self._save_debug_file(
-                f"{output_dir}/error_chunk_{chunk_idx}.log", 
+                debug_file, 
                 f"Processing error: {e}"
             )
             return []
     
-    def _extract_qa_with_llm(self, qa_text: str, output_dir: str) -> List[Dict]:
+    def _extract_qa_with_llm(self, qa_text: str) -> List[Dict]:
         """
         Extract Q&A data from text using LLM processing.
         
@@ -454,7 +474,6 @@ Transcript:
         
         Args:
             qa_text (str): Q&A section text
-            output_dir (str): Directory to save debug files
             
         Returns:
             List[Dict]: Structured Q&A data with questions and answers
@@ -475,7 +494,7 @@ Transcript:
         
         for idx, chunk in enumerate(qa_chunks, 1):
             print(f"🔄 Processing Q&A chunk {idx}/{len(qa_chunks)}")
-            chunk_data = self._process_qa_chunk(chunk, idx, output_dir)
+            chunk_data = self._process_qa_chunk(chunk, idx)
             all_qa_data.extend(chunk_data)
         
         # Renumber questions sequentially
@@ -509,22 +528,23 @@ Transcript:
         
         return renumbered_data
     
-    def _save_debug_file(self, file_path: str, content: str) -> None:
+    def _save_debug_file(self, debug_file: str, content: str) -> None:
         """
         Save debug content to file with error handling.
         
         Args:
-            file_path (str): Path where to save the file
+            debug_file (str): file name to save
             content (str): Content to save
         """
+        debug_path = os.path.join(self.log_dir, debug_file)
         try:
-            with open(file_path, 'w', encoding='utf-8') as f:
+            with open(debug_path, 'w', encoding='utf-8') as f:
                 f.write(content)
-            print(f"✅ Saved: {file_path}")
+            print(f"✅ Saved: {debug_path}")
         except Exception as e:
-            print(f"⚠️  Failed to save debug file {file_path}: {e}")
+            print(f"⚠️  Failed to save debug file {debug_path}: {e}")
     
-    def extract_content(self, text: str, output_dir: str) -> Tuple[str, List[Dict]]:
+    def extract_content(self, text: str) -> Tuple[str, List[Dict]]:
         """
         Extract and process both presentation and Q&A content from transcript.
         
@@ -533,7 +553,6 @@ Transcript:
         
         Args:
             text (str): Full transcript text
-            output_dir (str): Directory to save output and debug files
             
         Returns:
             Tuple[str, List[Dict]]: Cleaned presentation text and structured Q&A data
@@ -551,58 +570,45 @@ Transcript:
             print("⚠️  Q&A section not found, treating entire text as presentation")
         
         print("🧹 Cleaning presentation content...")
-        cleaned_presentation = self._clean_presentation_with_llm(presentation_text, output_dir)
+        cleaned_presentation = self._clean_presentation_with_llm(presentation_text)
         
         print("❓ Extracting Q&A data...")
-        qa_data = self._extract_qa_with_llm(qa_text, output_dir)
+        qa_data = self._extract_qa_with_llm(qa_text)
         
         print(f"✅ Extraction complete: {len(qa_data)} Q&A entries processed")
         return cleaned_presentation, qa_data
     
-    def _save_outputs(self, presentation: str, qa_data: List[Dict], output_dir: str) -> None:
+    def _save_outputs(self, presentation: str, qa_data: List[Dict]) -> None:
         """
         Save processed content to output files.
         
         Args:
             presentation (str): Cleaned presentation text
             qa_data (List[Dict]): Structured Q&A data
-            output_dir (str): Directory to save output files
         """
-        output_path = Path(output_dir)
-        output_path.mkdir(parents=True, exist_ok=True)
         
         # Save presentation text
-        presentation_file = output_path / "presentation.txt"
         try:
-            with open(presentation_file, 'w', encoding='utf-8') as f:
+            with open(self.output_presentation_path, 'w', encoding='utf-8') as f:
                 f.write(presentation)
-            print(f"✅ Saved: {presentation_file}")
+            print(f"✅ Saved: {self.output_presentation_path}")
         except Exception as e:
-            print(f"❌ Failed to save presentation.txt: {e}")
+            print(f"❌ Failed to save {self.output_presentation_path}: {e}")
         
         # Save Q&A data as DataFrame and export to multiple formats
         if qa_data:
             df = pd.DataFrame(qa_data)
             
-            # Save as CSV
-            csv_file = output_path / "qa_data.csv"
-            try:
-                df.to_csv(csv_file, index=False)
-                print(f"✅ Saved: {csv_file}")
-            except Exception as e:
-                print(f"❌ Failed to save qa_data.csv: {e}")
-            
             # Save as Excel
-            excel_file = output_path / "qa_data.xlsx"
             try:
-                df.to_excel(excel_file, index=False)
-                print(f"✅ Saved: {excel_file}")
+                df.to_excel(self.output_qa_path, index=False)
+                print(f"✅ Saved: {self.output_qa_path}")
             except Exception as e:
-                print(f"❌ Failed to save qa_data.xlsx: {e}")
+                print(f"❌ Failed to save {self.output_qa_path}: {e}")
         else:
             print("⚠️  No Q&A data to save")
     
-    def process_transcript(self, file_path: str, output_dir: str = "output") -> Tuple[str, pd.DataFrame]:
+    def process_transcript(self, file_path: str) -> Tuple[str, pd.DataFrame]:
         """
         Complete transcript processing pipeline.
         
@@ -611,7 +617,6 @@ Transcript:
         
         Args:
             file_path (str): Path to the transcript file (PDF or DOCX)
-            output_dir (str): Directory to save output files (default: "output")
             
         Returns:
             Tuple[str, pd.DataFrame]: Processed presentation text and Q&A DataFrame
@@ -626,10 +631,10 @@ Transcript:
         print(f"📄 Extracted {len(raw_text):,} characters from transcript")
         
         # Process content using LLM
-        presentation, qa_data = self.extract_content(raw_text, output_dir)
+        presentation, qa_data = self.extract_content(raw_text)
         
         # Save outputs
-        self._save_outputs(presentation, qa_data, output_dir)
+        self._save_outputs(presentation, qa_data)
         
         # Return processed data
         qa_dataframe = pd.DataFrame(qa_data) if qa_data else pd.DataFrame()
@@ -653,22 +658,31 @@ def main() -> None:
         file_name = "JPM_1q25-earnings-transcript.pdf"
         file_directory = "JPM/JPM Presentation texts/2025/Q1"
         file_path = os.path.join(file_directory, file_name)
-        output_directory = "output"
+        ticker = "JPM"
+        year = 2025
+        quarter = 1
+
+        #file_name = "250429-1q-2025-earnings-release-investors-and-analysts-call-transcript.pdf"
+        #file_directory = "HSBC/HSBC Presentation texts/2025"
+        #file_path = os.path.join(file_directory, file_name)
+        #ticker = "HSBC"
+        #year = 2025
+        #quarter = 1
         
         # Verify file exists
         if not os.path.exists(file_path):
             raise FileNotFoundError(f"Transcript file not found: {file_path}")
         
         # Initialize processor and run
-        processor = TranscriptProcessor()
-        presentation, qa_dataframe = processor.process_transcript(file_path, output_directory)
+        processor = TranscriptProcessor(ticker, year, quarter)
+        presentation, qa_dataframe = processor.process_transcript(file_path)
         
         # Display summary statistics
         print("\n" + "="*60)
         print("📈 PROCESSING SUMMARY")
         print("="*60)
         print(f"Input file: {file_path}")
-        print(f"Output directory: {output_directory}")
+        print(f"Output directory: {processor.output_dir}")
         print(f"Presentation words: {len(presentation.split()):,}")
         print(f"Q&A entries: {len(qa_dataframe):,}")
         if not qa_dataframe.empty:
