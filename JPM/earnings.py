@@ -55,7 +55,7 @@ class TranscriptProcessor:
     # Class constants
     DEFAULT_CHUNK_SIZE = 7000
     QA_CHUNK_SIZE = 8000
-    MAX_TOKENS = 1500
+    MAX_TOKENS = 3000
     TEMPERATURE = 0
     MODEL_NAME = "gpt-4-turbo"
     
@@ -85,6 +85,7 @@ class TranscriptProcessor:
         self.output_dir = Path("output")
         self.output_presentation_path = os.path.join(self.output_dir, self.output_presentation_file)
         self.output_qa_path = os.path.join(self.output_dir, self.output_qa_file)
+
         # delete and create log directory
         if os.path.exists("logs"):
             for file in os.listdir("logs"):
@@ -96,7 +97,7 @@ class TranscriptProcessor:
             raise ValueError("OpenAI API key is required. Set OPENAI_API_KEY environment variable or pass it directly.")
         
         self.client = OpenAI(api_key=self.api_key)
-        
+    
     def _fix_pdf_encoding(self, text: str) -> str:
         """
         Clean and fix common PDF encoding issues.
@@ -239,13 +240,13 @@ class TranscriptProcessor:
             f"Unsupported file format: {file_extension}. "
             "Supported formats: .pdf, .docx, .doc"
         )
-    
+        
     def _find_qa_section_start(self, text: str) -> int:
         """
         Locate the start of the Q&A section in the transcript.
         
         Uses multiple patterns to identify where the Q&A section begins,
-        as different transcripts may use various formatting styles.
+        including specific analyst name patterns.
         
         Args:
             text (str): Full transcript text
@@ -254,21 +255,36 @@ class TranscriptProcessor:
             int: Character position where Q&A section starts, or -1 if not found
         """
         qa_patterns = [
+            # Traditional Q&A markers
             r'QUESTION AND ANSWER SECTION',
             r'QUESTIONS? AND ANSWERS?',
             r'Q&A SECTION',
             r'Q&A',
+            r'(?i)can\s*we\s*go\s*to\s*Q&?A',  # Common transition phrase
+            
+            # Look for first analyst question pattern (NAME, COMPANY:)
+            r'(?m)^[A-Z][A-Z\s]+,\s+[A-Z][A-Z\s&]+:\s*(?:Good morning|Hi|Thank you)',
+            
+            # Operator introducing questions
             r'(?i)OPERATOR:.*(?:question|Q:)',
-            r'(?i)Q:',  # Simple Q: pattern as fallback
+            
+            # Simple patterns as fallback
+            r'(?i)Q:',
+            r'(?m)^[A-Z\s]+:\s*(?:Good morning|Hi|Thank you).*(?:question|ask)',
         ]
         
-        for pattern in qa_patterns:
-            match = re.search(pattern, text, re.IGNORECASE)
-            if match:
-                return match.start()
+        # Try each pattern and return the earliest match
+        earliest_match = len(text)  # Start with end of text
+        found_match = False
         
-        return -1
-    
+        for pattern in qa_patterns:
+            match = re.search(pattern, text, re.IGNORECASE | re.MULTILINE)
+            if match and match.start() < earliest_match:
+                earliest_match = match.start()
+                found_match = True
+        
+        return earliest_match if found_match else -1
+        
     def _create_presentation_cleaning_prompt(self, chunk: str) -> str:
         """
         Create a prompt for cleaning presentation content using LLM.
@@ -280,22 +296,22 @@ class TranscriptProcessor:
             str: Formatted prompt for the LLM
         """
         return f"""
-The following is a section from the presentation portion of an earnings call transcript.
+    The following is a section from the presentation portion of an earnings call transcript.
 
-Your task:
-- Remove all lines or phrases spoken by the conference operator.
-  Examples include: "Your line is open.", "We'll now take our next question.", "Thank you.", "Please hold while we connect your call.", etc.
-- Keep only the spoken remarks from company executives and analysts.
-- Do not add any headers like "Cleaned Presentation:" or introductory text.
-- Do not summarize or rephrase anything. Retain the exact wording and paragraph flow.
-- Preserve paragraph structure unless it causes fragmentation — in that case, merge into the previous paragraph naturally.
-- Remove any technical artifacts like page numbers or formatting remnants.
+    Your task:
+    - Remove all lines or phrases spoken by the conference operator.
+    Examples include: "Your line is open.", "We'll now take our next question.", "Thank you.", "Please hold while we connect your call.", etc.
+    - Keep only the spoken remarks from company executives and analysts.
+    - Do not add any headers like "Cleaned Presentation:" or introductory text.
+    - Do not summarize or rephrase anything. Retain the exact wording and paragraph flow.
+    - Preserve paragraph structure unless it causes fragmentation — in that case, merge into the previous paragraph naturally.
+    - Remove any technical artifacts like page numbers or formatting remnants.
 
-Return only the cleaned transcript text, with no extra commentary.
+    Return only the cleaned transcript text, with no extra commentary.
 
-Transcript:
-{chunk}"""
-    
+    Transcript:
+    {chunk}"""
+
     def _clean_presentation_with_llm(self, text: str) -> str:
         """
         Clean presentation text using LLM processing in chunks.
@@ -346,7 +362,7 @@ Transcript:
                 continue
         
         return "\n\n".join(cleaned_chunks)
-    
+
     def _create_qa_extraction_prompt(self, chunk: str) -> str:
         """
         Create a prompt for extracting Q&A data using LLM.
@@ -358,37 +374,41 @@ Transcript:
             str: Formatted prompt for the LLM
         """
         return f"""
-From the following earnings call transcript, extract all questions and answers.
+    From the following earnings call transcript, extract all questions and answers.
 
-Instructions:
-- Remove any lines spoken by the conference operator (e.g., "Your line is open", "We'll take our next question", "Please hold", etc.).
-- Group each Q&A pair together sequentially.
-- Identify the questioner and responder by name or role if available.
-- If speaker identification is unclear, use generic labels like "Analyst" or "Executive".
-- Preserve the exact wording of questions and answers.
-- Format the output as a valid JSON array with the structure shown below.
+    Instructions:
+    - Remove any lines spoken by the conference operator (e.g., "Your line is open", "We'll take our next question", "Please hold", etc.).
+    - Group each Q&A pair together sequentially.
+    - Identify the questioner and responder by name or role if available.
+    - Do not skip any questions from named individuals.
+    - Preserve speaker names and roles as they appear in the transcript.
+    - If speaker identification is unclear, use generic labels like "Analyst" or "Executive".
+    - Preserve the exact wording of questions and answers.
+    - Include follow-up questions from the same analyst as separate question entries
+    - Format the output as a valid JSON array with the structure shown below.
 
-Required JSON format:
-[
-  {{
+    Required JSON format:
+    [
+    {{
     "question_number": 1,
     "type": "question",
     "speaker_name": "John Smith",
     "speaker_details": "Analyst, Goldman Sachs",
     "text": "My question is about..."
-  }},
-  {{
+    }},
+    {{
     "question_number": 1,
     "type": "answer",
     "speaker_name": "Jane Doe",
     "speaker_details": "CEO",
     "text": "Thanks for your question..."
-  }}
-]
+    }}
+    ]
+    IMPORTANT: Start extraction from the very first analyst question you can identify, even if it appears early in the text before any formal Q&A markers.
 
-Transcript:
-{chunk}"""
-    
+    Transcript:
+    {chunk}"""
+
     def _process_qa_chunk(self, chunk: str, chunk_idx: int) -> List[Dict]:
         """
         Process a single Q&A chunk using LLM.
@@ -464,7 +484,7 @@ Transcript:
                 f"Processing error: {e}"
             )
             return []
-    
+
     def _extract_qa_with_llm(self, qa_text: str) -> List[Dict]:
         """
         Extract Q&A data from text using LLM processing.
@@ -499,7 +519,7 @@ Transcript:
         
         # Renumber questions sequentially
         return self._renumber_questions(all_qa_data)
-    
+
     def _renumber_questions(self, qa_data: List[Dict]) -> List[Dict]:
         """
         Renumber questions sequentially across all chunks.
@@ -527,7 +547,7 @@ Transcript:
             renumbered_data.append(entry)
         
         return renumbered_data
-    
+
     def _save_debug_file(self, debug_file: str, content: str) -> None:
         """
         Save debug content to file with error handling.
@@ -543,7 +563,7 @@ Transcript:
             print(f"✅ Saved: {debug_path}")
         except Exception as e:
             print(f"⚠️  Failed to save debug file {debug_path}: {e}")
-    
+
     def extract_content(self, text: str) -> Tuple[str, List[Dict]]:
         """
         Extract and process both presentation and Q&A content from transcript.
@@ -577,7 +597,7 @@ Transcript:
         
         print(f"✅ Extraction complete: {len(qa_data)} Q&A entries processed")
         return cleaned_presentation, qa_data
-    
+
     def _save_outputs(self, presentation: str, qa_data: List[Dict]) -> None:
         """
         Save processed content to output files.
@@ -607,7 +627,7 @@ Transcript:
                 print(f"❌ Failed to save {self.output_qa_path}: {e}")
         else:
             print("⚠️  No Q&A data to save")
-    
+
     def process_transcript(self, file_path: str) -> Tuple[str, pd.DataFrame]:
         """
         Complete transcript processing pipeline.
@@ -655,19 +675,19 @@ def main() -> None:
     start_time = time.time()
     try:
         # Configuration - modify these values as needed
-        file_name = "JPM_1q25-earnings-transcript.pdf"
-        file_directory = "JPM/JPM Presentation texts/2025/Q1"
-        file_path = os.path.join(file_directory, file_name)
-        ticker = "JPM"
-        year = 2025
-        quarter = 1
-
-        #file_name = "250429-1q-2025-earnings-release-investors-and-analysts-call-transcript.pdf"
-        #file_directory = "HSBC/HSBC Presentation texts/2025"
+        #file_name = "JPM_1q25-earnings-transcript.pdf"
+        #file_directory = "JPM/JPM Presentation texts/2025/Q1"
         #file_path = os.path.join(file_directory, file_name)
-        #ticker = "HSBC"
+        #ticker = "JPM"
         #year = 2025
         #quarter = 1
+
+        file_name = "250429-1q-2025-earnings-release-investors-and-analysts-call-transcript.pdf"
+        file_directory = "HSBC/HSBC Presentation texts/2025"
+        file_path = os.path.join(file_directory, file_name)
+        ticker = "HSBC"
+        year = 2025
+        quarter = 1
         
         # Verify file exists
         if not os.path.exists(file_path):
