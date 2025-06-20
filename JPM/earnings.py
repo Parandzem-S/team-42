@@ -673,21 +673,32 @@ def main() -> None:
     In production, this could be modified to accept command-line arguments.
     """
     start_time = time.time()
+    _type = "ING"
     try:
-        # Configuration - modify these values as needed
-        #file_name = "JPM_1q25-earnings-transcript.pdf"
-        #file_directory = "JPM/JPM Presentation texts/2025/Q1"
-        #file_path = os.path.join(file_directory, file_name)
-        #ticker = "JPM"
-        #year = 2025
-        #quarter = 1
+        if _type == "JPM":
+            # Configuration - modify these values as needed
+            file_name = "JPM_1q25-earnings-transcript.pdf"
+            file_directory = "JPM/JPM Presentation texts/2025/Q1"
+            file_path = os.path.join(file_directory, file_name)
+            ticker = "JPM"
+            year = 2025
+            quarter = 1
 
-        file_name = "250429-1q-2025-earnings-release-investors-and-analysts-call-transcript.pdf"
-        file_directory = "HSBC/HSBC Presentation texts/2025"
-        file_path = os.path.join(file_directory, file_name)
-        ticker = "HSBC"
-        year = 2025
-        quarter = 1
+        if _type == "HSBC":
+            file_name = "250429-1q-2025-earnings-release-investors-and-analysts-call-transcript.pdf"
+            file_directory = "HSBC/HSBC Presentation texts/2025"
+            file_path = os.path.join(file_directory, file_name)
+            ticker = "HSBC"
+            year = 2025
+            quarter = 1
+
+        if _type == "ING":
+            file_name = "ING_Transcript_Analyst_Call_3Q2023.pdf"
+            file_directory = "ING"
+            file_path = os.path.join(file_directory, file_name)
+            ticker = "ING"
+            year = 2023
+            quarter = 3
         
         # Verify file exists
         if not os.path.exists(file_path):
