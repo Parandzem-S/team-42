@@ -1,0 +1,14 @@
+# Core libraries from your original code
+torch
+transformers
+pandas
+pdfplumber
+tqdm
+
+# Streamlit and visualization
+streamlit
+plotly
+numpy
+
+# Additional dependencies that might be needed
+matplotlib
