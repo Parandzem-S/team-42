@@ -3,7 +3,6 @@ node_modules
 *.env 
 .env* 
 *.local
-*.txt
 *.csv
 *.xlsx
 *.log
