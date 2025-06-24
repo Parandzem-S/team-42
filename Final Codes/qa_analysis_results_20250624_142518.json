@@ -1,0 +1,17 @@
+{
+  "metadata": {
+    "processing_date": "2025-06-24T14:25:18.654326",
+    "model_used": "microsoft/Phi-4-mini-instruct",
+    "total_qa_pairs": 219,
+    "successful_analyses": 219,
+    "processing_summary": {
+      "rows_with_valid_summaries": 1010,
+      "risk_detected_count": 289,
+      "fully_answered_count": 685
+    }
+  },
+  "qa_analyses": [
+    {
+      "qa_pair_id": 1,
+      "grouping_info": {
+        "year": 
