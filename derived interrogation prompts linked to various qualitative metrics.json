@@ -1,0 +1,277 @@
+{
+  "prompts": [
+    {
+      "category": "Management and Governance Issues",
+      "name": "Frequent Changes in Auditors",
+      "keywords": [
+        "Change of auditor",
+        "auditor resignation",
+        "new auditing firm appointed",
+        "rotation of audit partners more frequently than usual"
+      ],
+      "context": "Any mention of audit firm changes outside standard rotation."
+    },
+    {
+      "category": "Management and Governance Issues",
+      "name": "Nervous, Unresponsive, or Evasive Management",
+      "keywords": [
+        "No direct answer",
+        "unable to comment",
+        "we cannot disclose",
+        "further details will be provided at a later date"
+      ],
+      "context": "Primarily from Q&A transcripts. Tone/Semantic Cues: Hesitation, avoidance of direct questions, repetition of non-committal phrases, significant pauses in speech (if transcripts include timings)."
+    },
+    {
+      "category": "Management and Governance Issues",
+      "name": "High Turnover or Loss of Key Staff",
+      "keywords": [
+        "Resignation of [role/name]",
+        "departure of",
+        "stepping down",
+        "senior management changes",
+        "talent retention challenges",
+        "significant staff turnover"
+      ]
+    },
+    {
+      "category": "Management and Governance Issues",
+      "name": "Misrepresentation or Accounting Issues",
+      "keywords": [
+        "Restatement of financials",
+        "accounting irregularities",
+        "audit findings",
+        "material misstatement",
+        "non-compliance with accounting standards"
+      ]
+    },
+    {
+      "category": "Management and Governance Issues",
+      "name": "Sudden Departure of Key Executives or Board Directors",
+      "keywords": [
+        "Immediate resignation",
+        "abrupt departure",
+        "ceased to be a director",
+        "effective immediately"
+      ]
+    },
+    {
+      "category": "Management and Governance Issues",
+      "name": "Material Weaknesses in Internal Controls",
+      "keywords": [
+        "Material weakness identified",
+        "control deficiencies",
+        "failure in internal controls",
+        "inadequate internal controls"
+      ]
+    },
+    {
+      "category": "Management and Governance Issues",
+      "name": "Adverse Audit Opinions or Disclaimer of Opinion",
+      "keywords": [
+        "Adverse opinion",
+        "disclaimer of opinion",
+        "qualified opinion",
+        "audit report modification"
+      ],
+      "context": "LLM needs to identify the type of audit opinion issued."
+    },
+    {
+      "category": "Management and Governance Issues",
+      "name": "Going Concern Warning in Audit Reports",
+      "keywords": [
+        "Going concern uncertainty",
+        "material uncertainty related to going concern",
+        "doubt about the entity's ability to continue as a going concern"
+      ]
+    },
+    {
+      "category": "Market and External Perceptions",
+      "name": "Negative Publicity",
+      "keywords": [
+        "Adverse media coverage",
+        "reputational damage",
+        "public scrutiny",
+        "negative press",
+        "criticism from [source]"
+      ]
+    },
+    {
+      "category": "Market and External Perceptions",
+      "name": "Credit Rating Downgrade",
+      "keywords": [
+        "Rating downgrade",
+        "outlook negative",
+        "placed on Credit Watch",
+        "credit rating revised downwards by [rating agency]"
+      ]
+    },
+    {
+      "category": "Market and External Perceptions",
+      "name": "Stock Price Declines or Rising Debt Costs",
+      "keywords": [
+        "Stock price fall",
+        "share price decline",
+        "market capitalization decrease",
+        "yields increasing",
+        "cost of debt rising",
+        "higher borrowing costs"
+      ]
+    },
+    {
+      "category": "Market and External Perceptions",
+      "name": "Widening Debt or Credit-Default-Swap (CDS) Spreads",
+      "keywords": [
+        "Spreads widening",
+        "CDS premium increase",
+        "cost of insuring debt rising"
+      ]
+    },
+    {
+      "category": "Market and External Perceptions",
+      "name": "Counterparties Requesting Additional Collateral",
+      "keywords": [
+        "Demands for additional collateral",
+        "collateral calls",
+        "increased margin requirements"
+      ]
+    },
+    {
+      "category": "Market and External Perceptions",
+      "name": "Increasing Wholesale or Retail Funding Costs",
+      "keywords": [
+        "Higher cost of funding",
+        "increased deposit rates",
+        "rising interbank lending rates",
+        "difficulty securing wholesale funding"
+      ]
+    },
+    {
+      "category": "Business Model and Strategic Shifts",
+      "name": "Rapid Asset Growth, Especially with Volatile Liabilities",
+      "keywords": [
+        "Aggressive growth strategy",
+        "accelerated asset expansion",
+        "significant increase in [specific asset type]",
+        "reliance on volatile funding sources"
+      ]
+    },
+    {
+      "category": "Business Model and Strategic Shifts",
+      "name": "Growing Concentrations in Assets or Liabilities",
+      "keywords": [
+        "Concentration risk in [sector/geographic area]",
+        "increased exposure to single borrower/industry",
+        "high reliance on a few large depositors/funders"
+      ]
+    },
+    {
+      "category": "Business Model and Strategic Shifts",
+      "name": "Deviation from Traditional Business Model",
+      "keywords": [
+        "Strategic pivot towards [new area]",
+        "significant shift in business focus",
+        "departure from core operations",
+        "new business lines with limited experience"
+      ]
+    },
+    {
+      "category": "Business Model and Strategic Shifts",
+      "name": "Deterioration in Product/Service Quality",
+      "keywords": [
+        "Customer complaints rising",
+        "service quality decline",
+        "negative customer feedback on [product/service]",
+        "loss of market share due to quality issues"
+      ]
+    },
+    {
+      "category": "Business Model and Strategic Shifts",
+      "name": "Increased Reliance on Financing Activities",
+      "keywords": [
+        "Increased reliance on external funding",
+        "higher leverage",
+        "funding strategy shifted towards [debt/equity issuance]"
+      ]
+    },
+    {
+      "category": "Business Model and Strategic Shifts",
+      "name": "Unexplained Movements in \"Other Assets\" or \"Other Liabilities\"",
+      "keywords": [
+        "Significant increase/decrease in 'other assets/liabilities' without clear explanation",
+        "unusual movements in miscellaneous accounts"
+      ]
+    },
+    {
+      "category": "Business Model and Strategic Shifts",
+      "name": "Fair Value Adjustments on Financial Instruments",
+      "keywords": [
+        "Significant fair value losses",
+        "revaluation downward of financial instruments",
+        "impairment charges on [specific instrument]"
+      ]
+    },
+    {
+      "category": "Business Model and Strategic Shifts",
+      "name": "Increased Off-Balance Sheet (OBS) Items and Risks",
+      "keywords": [
+        "Growth in off-balance sheet exposures",
+        "contingent liabilities increasing",
+        "structured finance vehicles expanding",
+        "guarantees issued"
+      ]
+    },
+    {
+      "category": "Market and External Perceptions",
+      "name": "Declining Funding and Lending Activities",
+      "keywords": [
+        "lending declined",
+        "deposits declined",
+        "loans declined",
+        "deposits down"
+      ],
+      "context": "Indicates a potential tightening of funding or reduced demand for credit, signaling a less healthy fiscal situation."
+    },
+    {
+      "category": "Business Model and Strategic Shifts",
+      "name": "Unclear Financial Performance Indicators",
+      "keywords": [
+        "uncry earnings",
+        "uncry cost",
+        "profitability nii",
+        "nii volume",
+        "return investment",
+        "increased profitability"
+      ],
+      "context": "Phrases that may indicate ambiguous, unclear, or potentially concerning trends in earnings, costs, net interest income (NII), or return on investment, which could mask underlying issues or signal a shift in financial health."
+    },
+    {
+      "category": "Business Model and Strategic Shifts",
+      "name": "Structural or Operational Risk",
+      "keywords": [
+        "cost risk",
+        "risk structurally"
+      ],
+      "context": "Suggests underlying risks related to the cost structure or inherent operational aspects of the business."
+    },
+    {
+      "category": "Business Model and Strategic Shifts",
+      "name": "Cross-Border Business Exposure",
+      "keywords": [
+        "border payments",
+        "eur billion",
+        "border exposure"
+      ],
+      "context": "Indicates exposure or activities related to international transactions or specific geographic (border) risks."
+    },
+    {
+      "category": "Market and External Perceptions",
+      "name": "Foreign Exchange and Funding Impacts",
+      "keywords": [
+        "foreign exchange",
+        "deposits declined"
+      ],
+      "context": "Combines foreign exchange dynamics with a decline in deposits, which could suggest challenges related to currency fluctuations impacting funding."
+    }
+  ]
+}
