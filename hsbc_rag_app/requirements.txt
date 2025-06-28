@@ -1,4 +1,4 @@
-# Core libraries from your original code
+# Core libraries from original Method 1 code
 torch
 transformers
 pandas
@@ -9,6 +9,24 @@ tqdm
 streamlit
 plotly
 numpy
-
-# Additional dependencies that might be needed
 matplotlib
+
+# Method 2 additional dependencies
+unicodedata2
+requests
+gdown
+json5
+
+# Additional processing libraries
+regex
+python-dateutil
+openpyxl
+
+# Optional: For better performance
+accelerate
+bitsandbytes
+
+# Development dependencies (optional)
+pytest
+black
+flake8
