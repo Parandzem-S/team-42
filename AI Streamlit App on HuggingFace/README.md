@@ -119,7 +119,7 @@ streamlit run app.py
 ## 📁 Project Structure
 
 ```
-hsbc_rag_app/
+AI Streamlit App on HuggingFace/
 ├── app.py                     # Main Streamlit application (live analysis + semantic insights)
 ├── phi4_agent.py              # Phi-4 Method 1 AI model integration
 ├── phi4_method2_agent.py      # Phi-4 Method 2 AI model integration
