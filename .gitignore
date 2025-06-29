@@ -6,3 +6,5 @@ node_modules
 *.csv
 *.xlsx
 *.log
+*.vscode
+*.devcontainer
