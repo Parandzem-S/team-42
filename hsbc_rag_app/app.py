@@ -8,6 +8,7 @@ import plotly.express as px
 import plotly.graph_objects as go
 from pathlib import Path
 import re
+import requests
 
 # Import your custom modules
 from pdf_processor import extract_qa_from_pdf, is_internal_speaker, is_external_speaker
@@ -155,6 +156,24 @@ st.markdown(f"""
         color: #856404;
         border: 1px solid #ffeaa7;
     }}
+    .summary-card {{
+        background: linear-gradient(135deg, #e8f5e8 0%, #f0f8ff 100%);
+        padding: 1.5rem;
+        border-radius: 15px;
+        border-left: 5px solid #2E8B57;
+        margin: 1rem 0;
+    }}
+    .summary-title {{
+        color: #1f4e79;
+        font-size: 1.3rem;
+        font-weight: bold;
+        margin-bottom: 1rem;
+    }}
+    .summary-bullet {{
+        color: #2E8B57;
+        font-weight: bold;
+        margin: 0.5rem 0;
+    }}
 </style>
 """, unsafe_allow_html=True)
 
@@ -163,6 +182,8 @@ if 'processed_data_method1' not in st.session_state:
     st.session_state.processed_data_method1 = None
 if 'processed_data_method2' not in st.session_state:
     st.session_state.processed_data_method2 = None
+if 'processed_data_method3' not in st.session_state:
+    st.session_state.processed_data_method3 = None
 if 'phi4_agent_method1' not in st.session_state:
     st.session_state.phi4_agent_method1 = None
 if 'phi4_agent_method2' not in st.session_state:
@@ -271,6 +292,72 @@ def count_qa_pairs_method2(df: pd.DataFrame) -> int:
     
     return valid_pairs
 
+def load_method3_data():
+    """Load Method 3 CSV data from GitHub"""
+    try:
+        # URLs for the CSV files
+        risk_distress_url = "https://raw.githubusercontent.com/Parandzem-S/team-42/main/hsbc_rag_app/Semantic_Analysis_by_Risk_Distress.csv"
+        answer_coverage_url = "https://raw.githubusercontent.com/Parandzem-S/team-42/main/hsbc_rag_app/Semantic_Analysis_by_Answer_Coverage.csv"
+        
+        # Load both CSV files
+        with st.spinner("📊 Loading Method 3 semantic analysis data from GitHub..."):
+            risk_distress_df = pd.read_csv(risk_distress_url)
+            answer_coverage_df = pd.read_csv(answer_coverage_url)
+        
+        # Store in session state
+        st.session_state.processed_data_method3 = {
+            'risk_distress': risk_distress_df,
+            'answer_coverage': answer_coverage_df
+        }
+        
+        return True
+        
+    except Exception as e:
+        st.error(f"❌ Failed to load Method 3 data: {str(e)}")
+        return False
+
+def display_data_overview_method3(data_dict):
+    """Display overview of Method 3 semantic analysis data"""
+    st.markdown("### 📊 Method 3: Semantic Analysis Overview")
+    
+    # Display key findings summary using streamlit components instead of HTML
+    st.markdown("#### 🔍 Key Semantic Analysis Findings")
+    
+    # Answer Completeness Patterns
+    st.markdown("**📝 Answer Completeness Patterns:**")
+    st.markdown("• Answers tend to be ~5% longer when they are only partially answered, suggesting verbosity may mask a lack of clarity.")
+    st.markdown("• Fully answered responses contain 30% more conditional instances (\"if,\" \"assuming,\" etc.) than not-answered ones—**indicating stronger scenario framing.**")
+    st.markdown("• **Confidence terms increase by ~10% as answer completeness drops, suggesting speakers may compensate for weaker substance with strong tone.**")
+    
+    st.markdown("")  # Space
+    
+    # Risk Communication Patterns  
+    st.markdown("**⚠️ Risk Communication Patterns:**")
+    st.markdown("• **Speakers use if-clauses 60% more often when clear risk is present**, likely to express caution and frame hypothetical scenarios.")
+    st.markdown("• **Unclear risk responses show the highest use of hedging terms (nearly 3× compared to no-risk answers)**—indicating strategic ambiguity.")
+    st.markdown("• **Confidence terms peak in unclear risk scenarios**, implying rhetorical reassurance in the absence of firm guidance.")
+    
+    st.markdown("")  # Space
+    
+    # Analysis Dimensions
+    st.markdown("**📊 Analysis Dimensions:**")
+    st.markdown("• **Modal Verbs** • **Conditional Phrases** • **Confidence Terms** • **Uncertainty Terms** • **Hedging Terms** • **Answer Length (words)**")
+    
+    # Data preview sections
+    st.markdown("### 📋 Risk & Distress Data Preview")
+    st.dataframe(
+        data_dict['risk_distress'].head(10),
+        use_container_width=True,
+        height=300
+    )
+    
+    st.markdown("### 📋 Answer Coverage Data Preview")
+    st.dataframe(
+        data_dict['answer_coverage'].head(10),
+        use_container_width=True,
+        height=300
+    )
+
 def initialize_phi4_agent_method1():
     """Initialize Phi-4 agent Method 1"""
     if st.session_state.phi4_agent_method1 is None:
@@ -343,8 +430,12 @@ def method_selection_sidebar():
     # Method selection radio buttons with custom styling
     method_choice = st.radio(
         "Choose your analysis method:",
-        options=["method1", "method2"],
-        format_func=lambda x: "📄 Phi-4 Method 1: HSBC PDF Processor" if x == "method1" else "🏦 Phi-4 Method 2: Multi-Bank Financial Metrics Extractor",
+        options=["method1", "method2", "method3"],
+        format_func=lambda x: (
+            "📄 Phi-4 Method 1: HSBC PDF Processor" if x == "method1" else
+            "🏦 Phi-4 Method 2: Multi-Bank Financial Metrics Extractor" if x == "method2" else
+            "📊 Method 3: Semantic Analysis Dashboard"
+        ),
         key="method_selection"
     )
     
@@ -355,30 +446,26 @@ def method_selection_sidebar():
         if method_choice == "method1":
             st.session_state.processed_data_method2 = None
             st.session_state.analysis_results_method2 = None
-        else:
+        elif method_choice == "method2":
             st.session_state.processed_data_method1 = None
             st.session_state.analysis_results_method1 = None
+        else:  # method3
+            st.session_state.processed_data_method1 = None
+            st.session_state.processed_data_method2 = None
+            st.session_state.analysis_results_method1 = None
+            st.session_state.analysis_results_method2 = None
+            # Auto-load Method 3 data when selected
+            if st.session_state.processed_data_method3 is None:
+                if load_method3_data():
+                    st.rerun()  # Refresh to show the data immediately
     
     # Method descriptions with bullet points
     if st.session_state.selected_method == "method1":
-        st.info("""📄 **Phi-4 Method 1: HSBC PDF Upload & Analysis**
-
-• Upload HSBC transcript PDFs directly
-• Extract Q&A data using PDF processing  
-• Select number of Q&A pairs for analysis
-• AI analysis focused on risk detection
-• Insight generation and answer coverage
-• Detailed transparency analysis""")
-    else:
-        st.info("""🏦 **Phi-4 Method 2: Multi-Bank Financial Metrics Extractor**
-
-• Pre-processed multi-bank transcript data access
-• Filter by bank, year, quarter (multi-select)
-• Select number of Q&A pairs for analysis
-• Detects and extracts financial metrics discussed
-• Captures metric values, trends (increase/decrease/stable)
-• Determines if questions were answered or avoided
-• Cross-bank comparative financial analysis""")
+        st.info("""📄 **Phi-4 Method 1: HSBC PDF Upload & Analysis**""")
+    elif st.session_state.selected_method == "method2":
+        st.info("""🏦 **Phi-4 Method 2: Multi-Bank Financial Metrics Extractor**""")
+    else:  # method3
+        st.info("""📊 **Method 3: Semantic Analysis Dashboard**""")
     
     st.markdown("---")
 
@@ -977,10 +1064,6 @@ def display_analysis_results_method2(analysis_results):
                                 else:
                                     status_color = "❓"
                                     st.warning(f"**{status_color} Answer Status:** {status}")
-                            
-                            # Always show raw output in collapsible section for reference
-                            with st.expander(f"🔍 Raw AI Output ({len(metrics)} metrics parsed)"):
-                                st.code(raw_output, language="text")
                         
                         else:
                             # Fallback: show count or raw output preview
@@ -989,10 +1072,6 @@ def display_analysis_results_method2(analysis_results):
                                 st.info(f"📊 {metrics_count} financial metrics detected (parsing failed)")
                             else:
                                 st.warning("⚠️ No financial metrics found")
-                            
-                            if raw_output and raw_output != "Processing failed":
-                                with st.expander("📄 View Raw AI Output"):
-                                    st.code(raw_output, language="text")
                     
                     with col2:
                         st.markdown("**Answers:**")
@@ -1010,10 +1089,6 @@ def display_analysis_results_method2(analysis_results):
                         with col2b:
                             avoid_color = "🔴" if qa.get('question_avoided', False) else "🟢"
                             st.markdown(f"**Avoided:** {avoid_color} {'Yes' if qa.get('question_avoided', False) else 'No'}")
-                        
-                        if qa.get('raw_llm_output') and qa['raw_llm_output'] != "Processing failed":
-                            with st.expander("Raw LLM Output"):
-                                st.code(qa['raw_llm_output'])
 
 def chat_interface():
     """Interactive chat interface with Phi-4"""
@@ -1029,6 +1104,10 @@ def chat_interface():
         current_data = st.session_state.processed_data_method2
         current_agent = st.session_state.phi4_agent_method2
         method_name = "Phi-4 Method 2"
+    elif st.session_state.selected_method == "method3":
+        st.markdown(f"### 💬 Chat Interface Not Available for Method 3")
+        st.info("📊 Method 3 provides pre-computed semantic analysis results. Chat functionality is available for Methods 1 and 2 only.")
+        return
     
     st.markdown(f"### 💬 Chat with {method_name} AI Agent")
     
@@ -1423,6 +1502,30 @@ def method2_sidebar():
         else:
             st.warning("⚠️ No Q&A pairs available for analysis")
 
+def method3_sidebar():
+    """Sidebar controls for Method 3"""
+    st.markdown("### 📊 Method 3: Semantic Analysis Controls")
+    
+    # Show data status
+    if st.session_state.processed_data_method3 is not None:
+        st.markdown("### 📊 Data Status")
+        
+        st.markdown(f"""
+        <div class="qa-selection">
+            📋 <strong>Data Loaded Successfully!</strong>
+        </div>
+        """, unsafe_allow_html=True)
+        
+        # Reload button in case user wants to refresh data
+        if st.button("🔄 Reload Data", key="reload_method3"):
+            if load_method3_data():
+                st.success("✅ Method 3 data reloaded successfully!")
+                st.rerun()
+    
+    else:
+        # Loading indicator - data should be loading automatically
+        st.info("📊 Loading semantic analysis data automatically...")
+
 def export_section():
     """Export options for current method - In-memory only"""
     st.markdown("---")
@@ -1465,6 +1568,27 @@ def export_section():
                 file_name=f"phi4_method2_ai_analysis_{datetime.now().strftime('%Y%m%d_%H%M%S')}.json",
                 mime="application/json"
             )
+    
+    elif st.session_state.selected_method == "method3" and st.session_state.processed_data_method3 is not None:
+        data_dict = st.session_state.processed_data_method3
+        
+        if st.button("📊 Download Risk & Distress Data", key="download_method3_risk"):
+            csv = data_dict['risk_distress'].to_csv(index=False)
+            st.download_button(
+                label="Download CSV",
+                data=csv,
+                file_name=f"semantic_analysis_risk_distress_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv",
+                mime="text/csv"
+            )
+        
+        if st.button("📊 Download Answer Coverage Data", key="download_method3_coverage"):
+            csv = data_dict['answer_coverage'].to_csv(index=False)
+            st.download_button(
+                label="Download CSV",
+                data=csv,
+                file_name=f"semantic_analysis_answer_coverage_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv",
+                mime="text/csv"
+            )
 
 def main():
     """Main Streamlit app with updated heading"""
@@ -1472,6 +1596,15 @@ def main():
     # Updated header with Team 42 info
     st.markdown('<h1 class="main-header">🏦 Team 42 - Cambridge - Bank of England Student Project</h1>', unsafe_allow_html=True)
     st.markdown('<p class="sub-header">Multi-Bank AI Financial Analysis Platform | Powered by Phi-4 for intelligent transcript analysis and insights</p>', unsafe_allow_html=True)
+    
+    # Add team member names
+    st.markdown('''
+    <div style="text-align: center; margin-bottom: 2rem; padding: 1rem; background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%); border-radius: 10px; border-left: 4px solid #4CAF50;">
+        <p style="margin: 0; font-size: 1.1rem; color: #495057; font-weight: 500;">
+            👥 <strong>Team Members:</strong> Daniela Miccoli • Garen Arevian • Geoffrey Payne • Adrian Mircea Guinea • Parandzem Sargsyan
+        </p>
+    </div>
+    ''', unsafe_allow_html=True)
     
     # Sidebar with method selection and controls
     with st.sidebar:
@@ -1483,8 +1616,10 @@ def main():
         # Method-specific controls
         if st.session_state.selected_method == "method1":
             method1_sidebar()
-        else:
+        elif st.session_state.selected_method == "method2":
             method2_sidebar()
+        else:  # method3
+            method3_sidebar()
         
         export_section()
     
@@ -1496,57 +1631,65 @@ def main():
         current_data = st.session_state.processed_data_method1
         current_analysis = st.session_state.analysis_results_method1
         method_display = "Phi-4 Method 1"
-    else:
+    elif st.session_state.selected_method == "method2":
         current_data = st.session_state.processed_data_method2
         current_analysis = st.session_state.analysis_results_method2
         method_display = "Phi-4 Method 2"
+    else:  # method3
+        current_data = st.session_state.processed_data_method3
+        method_display = "Method 3: Semantic Analysis"
     
     if current_data is not None:
-        # Tabs for different views
-        tab1, tab2, tab3, tab4 = st.tabs(["📊 Overview", "📈 Visualizations", "🧠 AI Analysis", "💬 Chat"])
-        
-        with tab1:
-            if st.session_state.selected_method == "method1":
-                display_data_overview_method1(current_data)
-            else:
-                display_data_overview_method2(current_data)
+        # Tabs for different views - Method 3 only shows Overview tab
+        if st.session_state.selected_method == "method3":
+            # Method 3: Only overview tab with semantic analysis data
+            display_data_overview_method3(current_data)
+        else:
+            # Methods 1 & 2: Full tab functionality
+            tab1, tab2, tab3, tab4 = st.tabs(["📊 Overview", "📈 Visualizations", "🧠 AI Analysis", "💬 Chat"])
             
-            # Data preview
-            st.markdown(f"### 📋 {method_display} Data Preview")
-            if st.session_state.selected_method == "method2":
-                display_current_selection()
-            
-            st.dataframe(
-                current_data.head(20),
-                use_container_width=True,
-                height=400
-            )
-        
-        with tab2:
-            if st.session_state.selected_method == "method1":
-                create_visualizations_method1(current_data)
-            else:
-                create_visualizations_method2(current_data)
-        
-        with tab3:
-            if current_analysis:
+            with tab1:
                 if st.session_state.selected_method == "method1":
-                    display_analysis_results_method1(current_analysis)
+                    display_data_overview_method1(current_data)
                 else:
-                    display_analysis_results_method2(current_analysis)
-            else:
-                # Show Q&A pair selection info if available
-                if st.session_state.selected_method == "method1" and st.session_state.available_qa_pairs_method1 > 0:
-                    selected_pairs = st.session_state.selected_qa_pairs_method1 or "not selected"
-                    st.info(f"👆 Click 'Run {method_display} AI Analysis' in the sidebar to generate live insights\n\n📊 Available Q&A pairs: {st.session_state.available_qa_pairs_method1}\n🎯 Selected for analysis: {selected_pairs}")
-                elif st.session_state.selected_method == "method2" and st.session_state.available_qa_pairs_method2 > 0:
-                    selected_pairs = st.session_state.selected_qa_pairs_method2 or "not selected"
-                    st.info(f"👆 Click 'Run {method_display} AI Analysis' in the sidebar to generate live insights\n\n📊 Available Q&A pairs: {st.session_state.available_qa_pairs_method2}\n🎯 Selected for analysis: {selected_pairs}")
+                    display_data_overview_method2(current_data)
+                
+                # Data preview
+                st.markdown(f"### 📋 {method_display} Data Preview")
+                if st.session_state.selected_method == "method2":
+                    display_current_selection()
+                
+                st.dataframe(
+                    current_data.head(20),
+                    use_container_width=True,
+                    height=400
+                )
+            
+            with tab2:
+                if st.session_state.selected_method == "method1":
+                    create_visualizations_method1(current_data)
                 else:
-                    st.info(f"👆 Click 'Run {method_display} AI Analysis' in the sidebar to generate live insights")
-        
-        with tab4:
-            chat_interface()
+                    create_visualizations_method2(current_data)
+            
+            with tab3:
+                if current_analysis:
+                    if st.session_state.selected_method == "method1":
+                        display_analysis_results_method1(current_analysis)
+                    else:
+                        display_analysis_results_method2(current_analysis)
+                else:
+                    # Show Q&A pair selection info if available
+                    if st.session_state.selected_method == "method1" and st.session_state.available_qa_pairs_method1 > 0:
+                        selected_pairs = st.session_state.selected_qa_pairs_method1 or "not selected"
+                        st.info(f"👆 Click 'Run {method_display} AI Analysis' in the sidebar to generate live insights\n\n📊 Available Q&A pairs: {st.session_state.available_qa_pairs_method1}\n🎯 Selected for analysis: {selected_pairs}")
+                    elif st.session_state.selected_method == "method2" and st.session_state.available_qa_pairs_method2 > 0:
+                        selected_pairs = st.session_state.selected_qa_pairs_method2 or "not selected"
+                        st.info(f"👆 Click 'Run {method_display} AI Analysis' in the sidebar to generate live insights\n\n📊 Available Q&A pairs: {st.session_state.available_qa_pairs_method2}\n🎯 Selected for analysis: {selected_pairs}")
+                    else:
+                        st.info(f"👆 Click 'Run {method_display} AI Analysis' in the sidebar to generate live insights")
+            
+            with tab4:
+                chat_interface()
     
     else:
         # Welcome screen
@@ -1555,55 +1698,56 @@ def main():
         
         **Current Method: {method_display}**
         
-        This Cambridge - Bank of England student project uses advanced AI (Phi-4) to analyze banking documents with two powerful methods:
+        This Cambridge - Bank of England student project uses advanced AI (Phi-4) to analyze banking documents with three powerful methods:
         
         **📄 Phi-4 Method 1 - HSBC PDF Processor:**
         • Upload HSBC transcript PDFs directly
         • Extract Q&A data using advanced PDF processing
-        • **NEW:** Select number of Q&A pairs for AI analysis
-        • AI analysis focused on risk detection and insights
-        • Detailed answer coverage evaluation
-        • Comprehensive transparency analysis
+        • AI analysis focused on **risk detection and insights summary**
         
         **🏦 Phi-4 Method 2 - Multi-Bank Financial Metrics Extractor:**
-        • Access pre-processed multi-bank transcript data
-        • Filter by specific banks, years, and quarters (multi-select supported)
-        • **NEW:** Select number of Q&A pairs for AI analysis
+        • Access multi-bank transcript data
+        • Filter by specific banks, years, and quarters
+        • Select number of Q&A pairs for AI analysis
         • Detects and extracts financial metrics discussed in transcripts
-        • Captures metric values, trends (increase/decrease/stable), and status
+        • Captures **metric values, trends and status**
         • Determines if questions were answered or avoided by management
-        • Cross-bank comparative financial analysis and benchmarking
+        
+        **📊 Method 3 - Semantic Analysis Dashboard:**
+        • **Semantic and risk analysis** based on answer completeness and risk detection from method 1
+        • Superficial analysis checking specific expressions in answer texts
+        • Hedging terms and uncertainty indicators measurement
+        • Strategic communication pattern identification
         
         **🔥 Live Analysis Features:**
-        • 🧠 **Real-time AI Processing**: All analysis runs live using Phi-4 models
+        • 🧠 **Real-time AI Processing**: All analysis runs live using Phi-4 models (Methods 1 & 2 and Chat)
         • 📊 **Customizable Analysis**: Choose how many Q&A pairs to process
-        • 💬 **Interactive Chat**: Ask questions about your data using natural language
+        • 💬 **Interactive Chat**: Ask questions about your data using natural language (Phi-4 Model)
         • 📊 **Rich Visualizations**: Method-specific charts and graphs with bank context
         • 💾 **Export Options**: Download processed data and analysis results
         • 🔄 **Flexible Processing**: Switch between methods seamlessly in the sidebar
-        • ⚡ **Performance Optimized**: Fast data loading and instant method switching
-        • 💾 **In-Memory Only**: No local files saved during operation
         
         **Get Started:**
         1. Select your preferred method in the sidebar (larger buttons for easy selection)
-        2. Use the method-specific controls to upload files or select filters
+        2. Use the method-specific controls to upload files, select filters, or load data
         3. Process your data with progress tracking
-        4. **NEW:** Select how many Q&A pairs to analyze for optimal performance
-        5. Run live AI analysis for comprehensive insights
-        6. Explore your data and chat with the AI
+        6. Run live AI analysis for comprehensive insights (Methods 1 & 2)
+        7. Explore your data and chat with the AI (Methods 1 & 2)
         
         ---
         **About the Technology:**
         • Built with Streamlit for easy deployment and user experience
-        • Uses Microsoft Phi-4 with dual processing approaches
+        • Uses Microsoft Phi-4 with dual processing approaches (Methods 1 & 2)
+        • Pre-computed semantic analysis for communication patterns (Method 3)
         • Supports both PDF extraction and pre-processed data analysis
         • Optimized for performance with caching and lazy loading
-        • All AI processing happens live - no pre-computed results
+        • All AI processing happens live - no pre-computed results (Methods 1 & 2)
         • No data leaves your environment (when run locally)
         • No local files saved during operation
         
         **Team 42 - Cambridge University & Bank of England Collaboration**
         """)
+
 
 if __name__ == "__main__":
     main()

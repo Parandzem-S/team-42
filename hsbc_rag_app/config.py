@@ -1,7 +1,7 @@
 """
 Configuration file for Team 42 - Cambridge - Bank of England Student Project
 Multi-Bank AI Financial Analysis Platform
-Updated to remove pre-computed analysis loading functionality
+Updated to include Method 3 semantic analysis functionality
 """
 
 # ===== STREAMLIT APP CONFIGURATION =====
@@ -41,13 +41,64 @@ BANK_NAMES = {
     'uc': 'UniCredit'
 }
 
+# ===== METHOD 3 CONFIGURATION =====
+METHOD3_CONFIG = {
+    "risk_distress_url": "https://raw.githubusercontent.com/Parandzem-S/team-42/main/hsbc_rag_app/Semantic_Analysis_by_Risk_Distress.csv",
+    "answer_coverage_url": "https://raw.githubusercontent.com/Parandzem-S/team-42/main/hsbc_rag_app/Semantic_Analysis_by_Answer_Coverage.csv",
+    "description": "Semantic Analysis Dashboard",
+    "features": [
+        "Semantic and risk analysis based on answer completeness and risk detection from method 1",
+        "Risk & distress communication patterns",
+        "Answer coverage and completeness analysis",
+        "Modal verbs, conditional phrases, and confidence terms",
+        "Superficial analysis of specific expressions in answer texts",
+        "Hedging terms and uncertainty indicators",
+        "Statistical insights into communication strategies"
+    ]
+}
+
 # ===== ANALYSIS CONFIGURATION =====
 ANALYSIS_CONFIG = {
     "live_analysis_only": True,  # Force live analysis only
     "enable_result_caching": True,  # Cache results for performance
     "save_results_automatically": True,  # Auto-save results to files
     "max_qa_pairs_display": 50,  # Maximum Q&A pairs to display in UI
-    "default_qa_pairs_display": 10  # Default number of Q&A pairs to show
+    "default_qa_pairs_display": 10,  # Default number of Q&A pairs to show
+    "method3_data_cache_duration": 3600  # Cache Method 3 data for 1 hour (seconds)
 }
 
-# That's it! All analysis is now live-only with no pre-computed result loading
+# ===== METHOD DESCRIPTIONS =====
+METHOD_DESCRIPTIONS = {
+    "method1": {
+        "name": "Phi-4 Method 1: HSBC PDF Processor",
+        "icon": "📄",
+        "features": [
+            "Upload HSBC transcript PDFs directly",
+            "Extract Q&A data using PDF processing",
+            "Select number of Q&A pairs for analysis",
+            "AI analysis focused on risk detection",
+            "Insight generation and answer coverage",
+            "Detailed transparency analysis"
+        ]
+    },
+    "method2": {
+        "name": "Phi-4 Method 2: Multi-Bank Financial Metrics Extractor",
+        "icon": "🏦",
+        "features": [
+            "Pre-processed multi-bank transcript data access",
+            "Filter by bank, year, quarter (multi-select)",
+            "Select number of Q&A pairs for analysis",
+            "Detects and extracts financial metrics discussed",
+            "Captures metric values, trends (increase/decrease/stable)",
+            "Determines if questions were answered or avoided",
+            "Cross-bank comparative financial analysis"
+        ]
+    },
+    "method3": {
+        "name": "Method 3: Semantic Analysis Dashboard",
+        "icon": "📊",
+        "features": METHOD3_CONFIG["features"]
+    }
+}
+
+# That's it! All analysis is now live-only with no pre-computed result loading, plus Method 3 semantic analysis
