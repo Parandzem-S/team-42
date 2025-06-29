@@ -295,9 +295,9 @@ def count_qa_pairs_method2(df: pd.DataFrame) -> int:
 def load_method3_data():
     """Load Method 3 CSV data from GitHub"""
     try:
-        # URLs for the CSV files
-        risk_distress_url = "https://raw.githubusercontent.com/Parandzem-S/team-42/main/hsbc_rag_app/Semantic_Analysis_by_Risk_Distress.csv"
-        answer_coverage_url = "https://raw.githubusercontent.com/Parandzem-S/team-42/main/hsbc_rag_app/Semantic_Analysis_by_Answer_Coverage.csv"
+        # 🔄 CHANGE #2: UPDATED GitHub URLs to use new path
+        risk_distress_url = "https://raw.githubusercontent.com/Parandzem-S/team-42/main/AI%20Streamlit%20App%20on%20HuggingFace/Semantic_Analysis_by_Risk_Distress.csv"
+        answer_coverage_url = "https://raw.githubusercontent.com/Parandzem-S/team-42/main/AI%20Streamlit%20App%20on%20HuggingFace/Semantic_Analysis_by_Answer_Coverage.csv"
         
         # Load both CSV files
         with st.spinner("📊 Loading Method 3 semantic analysis data from GitHub..."):

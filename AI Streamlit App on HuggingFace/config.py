@@ -41,10 +41,11 @@ BANK_NAMES = {
     'uc': 'UniCredit'
 }
 
-# ===== METHOD 3 CONFIGURATION =====
+# ===== METHOD 3 CONFIGURATION ===== 
+# 🔄 CHANGE #1: UPDATED GitHub URLs to use new path
 METHOD3_CONFIG = {
-    "risk_distress_url": "https://raw.githubusercontent.com/Parandzem-S/team-42/main/hsbc_rag_app/Semantic_Analysis_by_Risk_Distress.csv",
-    "answer_coverage_url": "https://raw.githubusercontent.com/Parandzem-S/team-42/main/hsbc_rag_app/Semantic_Analysis_by_Answer_Coverage.csv",
+    "risk_distress_url": "https://raw.githubusercontent.com/Parandzem-S/team-42/main/AI%20Streamlit%20App%20on%20HuggingFace/Semantic_Analysis_by_Risk_Distress.csv",
+    "answer_coverage_url": "https://raw.githubusercontent.com/Parandzem-S/team-42/main/AI%20Streamlit%20App%20on%20HuggingFace/Semantic_Analysis_by_Answer_Coverage.csv",
     "description": "Semantic Analysis Dashboard",
     "features": [
         "Semantic and risk analysis based on answer completeness and risk detection from method 1",
