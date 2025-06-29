@@ -1,6 +1,6 @@
 """
 Multi-Bank Data Extractor for Method 2 Processing
-Updated with correct logic from improved_version_of_the_correct_copy_of_untitled6_v4.py
+STREAMS DIRECTLY from Google Drive into memory without downloading files
 """
 
 import pandas as pd
@@ -10,13 +10,11 @@ import re
 import unicodedata
 from typing import Dict, List, Any, Optional
 import requests
-import os
-import gdown
 import streamlit as st
 
 class MultiBankDataExtractor:
     """
-    Updated data extractor for Method 2 - handles pre-processed multi-bank transcript data
+    Multi-bank data extractor - STREAMS DIRECTLY from Google Drive, NO FILE SAVING
     """
     
     def __init__(self):
@@ -31,7 +29,7 @@ class MultiBankDataExtractor:
             'uc': 'UniCredit'
         }
         
-        # File IDs for downloading real data
+        # File IDs for streaming real data from Google Drive
         self.file_ids = [
             '1XhLXQV6sQxiHsjhAmdHAp9cKrxY_njeU', # Barclays
             '1fhmMml1irnFwwOWtdE5N_yjn8ZUDjCIX', # Credit Suisse
@@ -44,7 +42,7 @@ class MultiBankDataExtractor:
         
         self.file_names = ['barc', 'cs', 'db', 'hsbc', 'jpm', 'san', 'uc']
         
-        # Position databases for executives (from correct implementation)
+        # Position databases for executives
         self.pos_db = {
             "Silke Szypa": "Deputy Head of Investor Relations",
             "Christian Sewing": "Chief Executive Officer", 
@@ -116,23 +114,15 @@ class MultiBankDataExtractor:
             'barc': self.pos_barc
         }
         
-        # Cache for loaded data
+        # ONLY in-memory cache
         self.df_all_cache = None
         self.filters_cache = None
     
     def clear_cache(self):
-        """Clear cached data to force reload"""
+        """Clear in-memory cache only"""
         self.df_all_cache = None
         self.filters_cache = None
-        # Also try to remove cached files
-        try:
-            if os.path.exists("all_banks_transcript_split.xlsx"):
-                os.remove("all_banks_transcript_split.xlsx")
-                st.success("✅ Cache and saved files cleared successfully!")
-            else:
-                st.success("✅ Cache cleared successfully!")
-        except Exception as e:
-            st.warning(f"Cache cleared but couldn't remove file: {e}")
+        st.success("✅ In-memory cache cleared successfully!")
     
     def remove_diacritics(self, input_str: str) -> str:
         """Remove diacritics from string"""
@@ -140,11 +130,11 @@ class MultiBankDataExtractor:
         return ''.join(c for c in nfkd_form if not unicodedata.combining(c) and (c.isalpha() or c.isspace() or c == '.'))
     
     def standardize_name(self, name: str) -> str:
-        """Standardize speaker names using regex patterns from correct implementation"""
+        """Standardize speaker names using regex patterns"""
         name = name.strip()
         name = self.remove_diacritics(name)
         
-        # All the standardization patterns from the correct implementation
+        # All the standardization patterns
         if re.search(r'(?:C\.?\s?S\.?\s?)?Venkatakrishnan$', name, re.IGNORECASE):
             return 'C.S. Venkatakrishnan'
         elif re.search(r'Anna\s?[-_]?Cross$', name, re.IGNORECASE):
@@ -213,12 +203,12 @@ class MultiBankDataExtractor:
             return name
     
     def detect_question(self, df: pd.DataFrame) -> pd.Series:
-        """Detect questions from analysts that contain '?' - from correct implementation"""
+        """Detect questions from analysts that contain '?'"""
         return ((df['text'].astype(str).str.contains(r'\?')) &
                 (df['title'].astype(str).str.lower().str.contains('analyst'))).astype(int)
     
     def qa_sect_detect(self, df: pd.DataFrame) -> pd.Series:
-        """Detect Q&A sections in transcripts - from correct implementation"""
+        """Detect Q&A sections in transcripts"""
         df = df.copy()
         df['flag_qa_sect'] = 0
         
@@ -261,7 +251,7 @@ class MultiBankDataExtractor:
             group_idx = group_df.index
             sub_df = df.loc[group_idx]
             
-            # --- PRIMARY LOGIC: Look for Operator-based start ---
+            # Look for Operator-based start
             qa_start_match = sub_df[
                 (sub_df['speaker_lc'] == 'operator') &
                 sub_df['text_lc'].str.contains(qa_start_pattern, regex=True)
@@ -269,16 +259,16 @@ class MultiBankDataExtractor:
             
             qa_start_idx = qa_start_match.index.min() if not qa_start_match.empty else None
             
-            # --- FALLBACK: If no Operator start found, use first speaker ---
+            # Fallback: use first speaker
             if qa_start_idx is None:
                 fallback_start_match = sub_df[
                     sub_df['text_lc'].str.contains(qa_start_pattern, regex=True)
                 ]
                 if fallback_start_match.empty:
-                    continue  # Skip if still no match
+                    continue
                 qa_start_idx = fallback_start_match.index.min()
             
-            # --- PRIMARY: Look for Operator end ---
+            # Look for Operator end
             qa_end_match = sub_df[
                 (sub_df.index > qa_start_idx) &
                 (sub_df['speaker_lc'] == 'operator') &
@@ -287,7 +277,7 @@ class MultiBankDataExtractor:
             
             qa_end_idx = qa_end_match.index.min() if not qa_end_match.empty else None
             
-            # --- FALLBACK: If no Operator end found, use any speaker ---
+            # Fallback: use any speaker
             if qa_end_idx is None:
                 fallback_end_match = sub_df[
                     (sub_df.index > qa_start_idx) &
@@ -317,38 +307,45 @@ class MultiBankDataExtractor:
         return df
     
     def load_real_data(self) -> pd.DataFrame:
-        """Load and process the real data from Google Drive with caching"""
-        if self.df_all_cache is not None:
-            return self.df_all_cache
-            
-        try:
-            if os.path.exists("all_banks_transcript_split.xlsx"):
-                print("Loading existing processed data...")
-                self.df_all_cache = pd.read_excel("all_banks_transcript_split.xlsx")
-                return self.df_all_cache
-        except:
-            pass
+        """STREAM DIRECTLY: Read JSON data from Google Drive into memory without downloading files"""
         
-        print("Downloading and processing real bank data...")
+        # Return cached data if available
+        if self.df_all_cache is not None:
+            print("Using cached data from memory")
+            return self.df_all_cache
+        
+        print("🔄 Streaming bank data directly from Google Drive into memory...")
         
         json_data = {}
         
+        # Stream files directly from Google Drive without saving to disk
         for file_id, name in zip(self.file_ids, self.file_names):
             try:
-                url = f'https://drive.google.com/uc?id={file_id}'
-                print(f"Downloading {name}...")
-                gdown.download(url, name, quiet=True)
+                # Create direct download URL for Google Drive
+                url = f'https://drive.google.com/uc?export=download&id={file_id}'
+                print(f"📥 Streaming {name} from Google Drive...")
                 
-                with open(name, 'r') as f:
-                    json_data[name] = json.load(f)
-                    
-                os.remove(name)
+                # Stream content directly into memory
+                response = requests.get(url, stream=True)
+                response.raise_for_status()
+                
+                # Parse JSON directly from response content
+                json_data[name] = response.json()
+                print(f"✅ Loaded {name} into memory successfully")
+                
+            except requests.exceptions.RequestException as e:
+                print(f"❌ Network error downloading {name}: {e}")
+                continue
+            except json.JSONDecodeError as e:
+                print(f"❌ JSON parsing error for {name}: {e}")
+                continue
             except Exception as e:
-                print(f"Failed to download {name}: {e}")
+                print(f"❌ Failed to stream {name}: {e}")
                 continue
         
         if not json_data:
-            print("Failed to download data, using sample data instead...")
+            print("❌ All Google Drive files failed to stream")
+            print("✅ Using enhanced sample data instead")
             return self.create_sample_data()
         
         # Process data using correct implementation logic
@@ -406,68 +403,110 @@ class MultiBankDataExtractor:
         df_all = pd.DataFrame(records)
         df_all = df_all[['bank', 'year', 'quarter', 'speaker', 'title', 'text']]
         
+        # STORE ONLY IN MEMORY CACHE
         self.df_all_cache = df_all
         
-        try:
-            df_all.to_excel("all_banks_transcript_split.xlsx", index=False)
-        except:
-            pass
-        
-        print(f"Loaded {len(df_all)} total records from real data")
+        print(f"✅ Loaded {len(df_all)} total records in memory (NO FILES SAVED)")
         return df_all
     
     def create_sample_data(self) -> pd.DataFrame:
-        """Create sample data as fallback"""
-        print("Using sample data...")
+        """Create realistic sample data for Method 2 testing"""
+        print("✅ Using enhanced sample data for Method 2 testing...")
         sample_data = []
         
-        banks = ['hsbc', 'jpm', 'db', 'barc', 'cs', 'san', 'uc']
+        banks = ['hsbc', 'jpm', 'db', 'barc']  # Reduced for faster testing
         years = ['2023', '2024'] 
-        quarters = ['Q1', 'Q2', 'Q3', 'Q4']
+        quarters = ['Q3', 'Q4']  # Reduced for faster testing
+        
+        # Realistic financial questions and answers
+        qa_templates = [
+            {
+                'question': 'Can you provide details on your ROE performance this quarter? What was the actual ROE percentage and do you expect it to increase or decrease next quarter?',
+                'answer': 'Our ROE this quarter was 14.2%, which represents a solid performance. We expect ROE to increase slightly to around 15% next quarter based on our current projections and cost efficiency initiatives.',
+                'metrics': ['ROE', '14.2%', 'INCREASE', 'ANSWERED']
+            },
+            {
+                'question': 'What are your current capital ratios, specifically CET1? How do they compare to regulatory requirements and what is the outlook?',
+                'answer': 'Our CET1 ratio stands at 13.8%, well above the regulatory minimum of 10.5%. We anticipate maintaining stable capital ratios around current levels through the rest of the year.',
+                'metrics': ['CET1', '13.8%', 'STABLE', 'ANSWERED']
+            },
+            {
+                'question': 'Could you comment on your NIM trends and revenue outlook? Are you seeing pressure on margins?',
+                'answer': 'NIM has been under some pressure, currently at 2.1% compared to 2.3% last quarter. Revenue for the quarter was $8.2 billion. We expect some continued pressure on margins in the near term.',
+                'metrics': ['NIM', '2.1%', 'DECREASE', 'ANSWERED']
+            },
+            {
+                'question': 'What about dividend policy and capital returns? Any plans for buybacks or dividend increases?',
+                'answer': 'We remain committed to our dividend policy. Current dividend yield is 4.2%. Regarding buybacks, we prefer not to provide specific guidance at this time.',
+                'metrics': ['dividend', '4.2%', 'NO TRAJECTORY', 'AVOIDED']
+            },
+            {
+                'question': 'How is your cost efficiency program progressing? What are the targets for cost reduction?',
+                'answer': 'Our cost-to-income ratio improved to 61% this quarter from 63% previously. We are targeting further improvements to reach 58% by year end through our efficiency initiatives.',
+                'metrics': ['cost ratio', '61%', 'DECREASE', 'ANSWERED']
+            }
+        ]
         
         for bank in banks:
             for year in years:
                 for quarter in quarters:
-                    for i in range(10):
+                    # Add presentation section
+                    sample_data.extend([
+                        {
+                            'bank': bank,
+                            'year': year, 
+                            'quarter': quarter,
+                            'speaker': 'CEO',
+                            'title': 'Chief Executive Officer',
+                            'text': f'Welcome to {self.bank_names.get(bank, bank)} {quarter} {year} earnings call. This has been a strong quarter with solid financial performance across all our key metrics including ROE, capital ratios, and revenue growth. We remain well-positioned for continued success.'
+                        },
+                        {
+                            'bank': bank,
+                            'year': year,
+                            'quarter': quarter, 
+                            'speaker': 'Operator',
+                            'title': 'Operator',
+                            'text': 'Thank you. We will now begin the question and answer session. Our first question comes from Deutsche Bank.'
+                        }
+                    ])
+                    
+                    # Add realistic Q&A pairs
+                    for i, qa_template in enumerate(qa_templates[:3]):  # Use first 3 for testing
                         sample_data.extend([
                             {
                                 'bank': bank,
-                                'year': year, 
-                                'quarter': quarter,
-                                'speaker': f'CEO {i}',
-                                'title': 'Chief Executive Officer',
-                                'text': f'Welcome to {self.bank_names.get(bank, bank)} {quarter} {year} earnings call {i}. We had strong performance this quarter.'
-                            },
-                            {
-                                'bank': bank,
-                                'year': year,
-                                'quarter': quarter, 
-                                'speaker': 'Operator',
-                                'title': 'Operator',
-                                'text': 'We will now begin the question and answer session.'
-                            },
-                            {
-                                'bank': bank,
                                 'year': year,
                                 'quarter': quarter,
-                                'speaker': f'Analyst {i}', 
+                                'speaker': f'Analyst {i+1}',
                                 'title': 'Analyst',
-                                'text': f'Thank you. Can you provide more details on {bank} capital ratios and future outlook? What about ROE trends?'
+                                'text': qa_template['question']
                             },
                             {
                                 'bank': bank,
                                 'year': year,
                                 'quarter': quarter,
-                                'speaker': f'CFO {i}',
-                                'title': 'Chief Financial Officer', 
-                                'text': f'Our capital ratios remained strong at 15.2% for quarter {i}. ROE increased to 12% and we expect continued growth in {year}.'
+                                'speaker': 'CFO',
+                                'title': 'Chief Financial Officer',
+                                'text': qa_template['answer']
                             }
                         ])
+                    
+                    # Add call end
+                    sample_data.append({
+                        'bank': bank,
+                        'year': year,
+                        'quarter': quarter,
+                        'speaker': 'Operator',
+                        'title': 'Operator',
+                        'text': 'Thank you. This concludes today\'s call. You may now disconnect.'
+                    })
         
-        return pd.DataFrame(sample_data)
+        df = pd.DataFrame(sample_data)
+        print(f"✅ Created {len(df)} realistic sample records with proper Q&A structure")
+        return df
     
     def process_data_multiselect(self, selected_banks: List[str] = None, selected_years: List[str] = None, selected_quarters: List[str] = None) -> pd.DataFrame:
-        """Process the multi-bank data with multi-select filtering options using CORRECT IMPLEMENTATION LOGIC"""
+        """Process the multi-bank data with multi-select filtering options"""
         df_all = self.load_real_data()
         
         print(f"Starting with {len(df_all)} total records")
@@ -483,31 +522,22 @@ class MultiBankDataExtractor:
             df_all = df_all[df_all['quarter'].isin(selected_quarters)]
             print(f"After quarter filter: {len(df_all)} records")
         
-        # NOW APPLY THE CORRECT IMPLEMENTATION LOGIC TO DETECT QUERIES AND ANSWERS
-        
-        # Step 1: Detect questions from analysts that have "?" in composition
+        # Apply Q&A detection logic
         df_all['flag_question'] = self.detect_question(df_all)
-        
-        # Step 2: Detect Q&A sections
         df_all['flag_qa_sect'] = self.qa_sect_detect(df_all)
-        
-        # Step 3: Adjust question flags for analysts without "?" but in Q&A section
         df_all = self.adjust_flag_question_for_analysts(df_all)
-        
-        # Step 4: Re-run Q&A section detection
         df_all['flag_qa_sect'] = self.qa_sect_detect(df_all)
         
-        # Step 5: Create helper columns
+        # Create helper columns
         df_all['flag_sum_question_qa'] = df_all['flag_question'] + df_all['flag_qa_sect']
         df_all['flag_analyst'] = (df_all['title'] == 'Analyst').astype(int)
         df_all['flag_operator'] = (df_all['title'] == 'Operator').astype(int)
         df_all['flag_presenter'] = (~df_all['title'].isin(['Operator', 'Analyst'])).astype(int)
         
-        # Step 6: Create "type" column using the CORRECT LOGIC
+        # Create "type" column
         def set_type(row):
             word_count = len(str(row['text']).split())
             
-            # Only allow processing if word count is greater than 20
             if word_count <= 20:
                 return np.nan
             
@@ -528,7 +558,7 @@ class MultiBankDataExtractor:
         
         df_all['type'] = df_all.apply(set_type, axis=1)
         
-        # Step 7: Create person_type, name, and job columns
+        # Create additional columns
         df_all['person_type'] = np.where(df_all['flag_analyst'] == 1, 'participant', 
                                         np.where(df_all['flag_presenter'] == 1, 'presenter', None))
         df_all['name'] = np.where(df_all['person_type'].notnull(), df_all['speaker'], None)
@@ -567,24 +597,21 @@ class MultiBankDataExtractor:
         return self.filters_cache
     
     def get_filtered_options(self, selected_banks: List[str] = None, selected_years: List[str] = None) -> Dict[str, List[str]]:
-        """Get filtered year and quarter options based on selected banks and years (cascading filters)"""
+        """Get filtered year and quarter options based on selected banks and years"""
         df_sample = self.load_real_data()
         
         all_banks = sorted(list(df_sample['bank'].unique()))
         
         if selected_banks:
-            # Filter data based on selected banks
             filtered_df = df_sample[df_sample['bank'].isin(selected_banks)]
             available_years = sorted(list(filtered_df['year'].unique()))
             
-            # Further filter by years if provided
             if selected_years:
                 year_filtered_df = filtered_df[filtered_df['year'].isin(selected_years)]
                 available_quarters = sorted(list(year_filtered_df['quarter'].unique()))
             else:
                 available_quarters = sorted(list(filtered_df['quarter'].unique()))
         else:
-            # Return all options if no banks selected
             available_years = sorted(list(df_sample['year'].unique()))
             if selected_years:
                 year_filtered_df = df_sample[df_sample['year'].isin(selected_years)]

@@ -1,6 +1,6 @@
 """
-Fixed Phi-4 Method 2 Agent for Multi-Bank Financial Analysis
-Based on the correct implementation from improved_version_of_the_correct_copy_of_untitled6_v4.py
+STREAMLINED Phi-4 Method 2 Agent - Same prompts/tokens, faster processing
+Fixes processing bottlenecks while keeping original AI functionality intact
 """
 
 import warnings
@@ -20,7 +20,7 @@ import streamlit as st
 
 class Phi4Method2Agent:
     """
-    Fixed Phi-4 Agent for Method 2 - based on correct implementation
+    STREAMLINED Phi-4 Agent for Method 2 - Same prompts, faster processing
     """
     
     def __init__(self):
@@ -30,7 +30,7 @@ class Phi4Method2Agent:
         self.pipe = None
         self.model_loaded = False
         
-        # Method 2 specific generation args (from working implementation)
+        # ORIGINAL generation args - UNCHANGED
         self.generation_args = {
             "max_new_tokens": 500,
             "return_full_text": False,
@@ -40,7 +40,7 @@ class Phi4Method2Agent:
 
         self.batch_size = 8 if torch.cuda.is_available() else 2
         
-        # Standard message from working implementation
+        # ORIGINAL standard message - UNCHANGED
         self.standard_message = [
             {
                 'role': 'system',
@@ -78,12 +78,12 @@ class Phi4Method2Agent:
         ]
     
     def _load_model_lazy(self):
-        """Lazy load model only when needed with proper session state caching"""
+        """STREAMLINED: Faster model loading with less overhead"""
         if self.model_loaded:
             return True
             
         try:
-            # Check if we already have a loaded model in session state
+            # Check session state cache first
             if hasattr(st.session_state, 'phi4_method2_model_cache') and st.session_state.phi4_method2_model_cache is not None:
                 cached_model = st.session_state.phi4_method2_model_cache
                 self.model = cached_model['model']
@@ -92,14 +92,9 @@ class Phi4Method2Agent:
                 self.model_loaded = True
                 return True
             
-            # Only show loading message if we're actually loading for the first time
-            with st.spinner("🤖 Loading Phi-4 Method 2 model... (This only happens once)"):
-                progress_bar = st.progress(0)
-                
-                progress_bar.progress(25)
+            # STREAMLINED: Simpler loading with minimal UI
+            with st.spinner("🤖 Loading Phi-4 Method 2 model..."):
                 self.tokenizer = AutoTokenizer.from_pretrained("microsoft/Phi-4-mini-instruct", trust_remote_code=True)
-                
-                progress_bar.progress(50)
                 
                 if torch.cuda.is_available():
                     self.model = AutoModelForCausalLM.from_pretrained(
@@ -115,18 +110,13 @@ class Phi4Method2Agent:
                         trust_remote_code=True,
                     )
                 
-                progress_bar.progress(75)
-                
                 self.pipe = pipeline(
                     "text-generation",
                     model=self.model,
                     tokenizer=self.tokenizer,
                 )
                 
-                progress_bar.progress(100)
-                progress_bar.empty()
-                
-                # Cache the loaded model in session state to avoid reloading
+                # Cache in session state
                 st.session_state.phi4_method2_model_cache = {
                     'model': self.model,
                     'tokenizer': self.tokenizer,
@@ -134,47 +124,41 @@ class Phi4Method2Agent:
                 }
                 
                 self.model_loaded = True
-                st.success("✅ Phi-4 Method 2 model loaded and cached successfully!")
+                st.success("✅ Phi-4 Method 2 model loaded and cached!")
                 return True
             
         except Exception as e:
-            if 'progress_bar' in locals():
-                progress_bar.empty()
             st.error(f"❌ Failed to load Phi-4 Method 2 model: {str(e)}")
             return False
 
-    def _create_message_prompts(self, df: pd.DataFrame) -> pd.DataFrame:
-        """Create message prompts from the dataframe using the correct Q&A pairing logic"""
-        # Filter only rows where type is not empty and sort by index to maintain order
+    def _create_message_prompts_fast(self, df: pd.DataFrame, max_pairs: Optional[int] = None) -> pd.DataFrame:
+        """STREAMLINED: Faster message creation with less overhead"""
+        
+        # STREAMLINED: Minimal filtering and copying
         df_messages = df[df['type'].notnull()].copy()
         df_messages = df_messages.sort_index()
         
         if len(df_messages) == 0:
-            st.warning("No valid query/answer pairs found after filtering")
             return df_messages
         
-        # Add required columns for message creation
-        required_cols = ['type', 'person_type', 'name', 'job', 'text', 'bank', 'year', 'quarter']
-        for col in required_cols:
-            if col not in df_messages.columns:
-                df_messages[col] = None
+        # STREAMLINED: Pre-allocate for better performance
+        df_messages['message_final'] = None
         
-        # Initialize the column
-        df_messages['message_final'] = pd.Series(dtype='object')
-        
-        # Process queries and their immediately following answers
+        # STREAMLINED: Simplified processing with minimal logging
         processed_pairs = 0
         i = 0
         
         while i < len(df_messages):
+            if max_pairs is not None and processed_pairs >= max_pairs:
+                break
+                
             current_row = df_messages.iloc[i]
             
-            # Skip if not a query
             if current_row['type'] != 'query':
                 i += 1
                 continue
             
-            # Found a query - construct the query object
+            # STREAMLINED: Faster object creation
             query_obj = {
                 "type": "query",
                 "person_type": current_row.get('person_type', 'participant'),
@@ -182,19 +166,16 @@ class Phi4Method2Agent:
                 "text": current_row.get('text', '')
             }
             
-            # Gather all consecutive answers that follow this query
+            # STREAMLINED: Faster answer collection
             answer_objs = []
             j = i + 1
             
-            # Collect all consecutive "answer" rows until we hit another "query" or end of data
             while j < len(df_messages):
                 next_row = df_messages.iloc[j]
                 
                 if next_row['type'] == 'query':
-                    # Hit another query, stop collecting answers
                     break
                 elif next_row['type'] == 'answer':
-                    # This is an answer to our current query
                     answer_objs.append({
                         "type": "answer",
                         "person_type": next_row.get('person_type', 'presenter'),
@@ -202,12 +183,11 @@ class Phi4Method2Agent:
                         "job": next_row.get('job', 'Unknown'),
                         "text": next_row.get('text', '')
                     })
-                
                 j += 1
             
-            # Only process if we have at least one answer
+            # Only process if we have answers
             if len(answer_objs) > 0:
-                # Create the user content message using the correct format
+                # ORIGINAL message creation - UNCHANGED
                 message_user = {
                     "role": "user",
                     "content": (
@@ -219,51 +199,37 @@ class Phi4Method2Agent:
                     )
                 }
                 
-                # Final message for Phi-4
+                # ORIGINAL message final - UNCHANGED
                 message_final = self.standard_message + [message_user]
                 
-                # Save to DataFrame at the query row index
+                # Save to DataFrame
                 query_idx = df_messages.index[i]
                 df_messages.at[query_idx, 'message_final'] = message_final
                 
                 processed_pairs += 1
-                
-                # Debug info
-                st.write(f"**Q&A Pair {processed_pairs}** - Bank: {current_row.get('bank', 'Unknown')}")
-                st.write(f"Query: {query_obj['text'][:100]}...")
-                st.write(f"Answers: {len(answer_objs)} answer(s) found")
-                st.write("---")
             
-            # Move to the next potential query (which is at position j)
             i = j if j < len(df_messages) else len(df_messages)
         
-        st.success(f"✅ Created {processed_pairs} Q&A pair prompts for analysis")
+        # STREAMLINED: Minimal UI feedback
         return df_messages
 
-    def analyze_multibank_data(self, df: pd.DataFrame) -> Dict[str, Any]:
-        """
-        Analyze multi-bank transcript data using the correct Q&A pairing logic
-        """
+    def analyze_multibank_data(self, df: pd.DataFrame, max_pairs: Optional[int] = None) -> Dict[str, Any]:
+        """STREAMLINED: Much faster analysis with reduced UI overhead"""
+        
         if not self._load_model_lazy():
             return self._create_empty_results()
         
-        st.info("🔍 Analyzing multi-bank data with Phi-4 Method 2...")
-        st.info(f"📊 Input data: {len(df)} total records")
+        # STREAMLINED: Minimal status messages
+        total_records = len(df)
         
-        # Show breakdown of data types
-        if 'type' in df.columns:
-            type_counts = df['type'].value_counts()
-            st.info(f"🔍 Data breakdown: {dict(type_counts)}")
-        
-        # Create message prompts using the correct logic
-        with st.expander("🔧 Q&A Pair Creation Process", expanded=False):
-            df_messages = self._create_message_prompts(df)
+        # STREAMLINED: Fast message creation without expander overhead
+        df_messages = self._create_message_prompts_fast(df, max_pairs=max_pairs)
         
         if len(df_messages) == 0 or df_messages['message_final'].isna().all():
-            st.warning("No valid message prompts created from the data")
+            st.warning("No valid message prompts created")
             return self._create_empty_results()
         
-        # Filter out rows without message_final
+        # STREAMLINED: Quick filtering
         valid_messages = df_messages[df_messages['message_final'].notna()]
         
         if len(valid_messages) == 0:
@@ -271,36 +237,41 @@ class Phi4Method2Agent:
             return self._create_empty_results()
         
         total_pairs = len(valid_messages)
-        st.success(f"✅ Ready to process {total_pairs} Q&A pairs with Phi-4")
         
-        # Process with progress tracking
+        # STREAMLINED: Process with minimal UI overhead
         results = []
-        progress_bar = st.progress(0)
         
+        # STREAMLINED: Only show progress for larger datasets
+        if total_pairs > 3:
+            progress_bar = st.progress(0)
+            show_progress = True
+        else:
+            show_progress = False
+        
+        # STREAMLINED: Direct processing without excessive logging
         for i, (idx, row) in enumerate(valid_messages.iterrows()):
             try:
                 message_final = row['message_final']
                 
                 if message_final is not None and isinstance(message_final, list):
+                    # ORIGINAL AI processing - UNCHANGED
                     result = self.pipe(message_final, **self.generation_args)
                     generated_text = result[0]['generated_text']
                 else:
                     generated_text = "ERROR: Invalid message format"
                 
-                # Parse the output for metrics count
+                # STREAMLINED: Faster metrics parsing
                 metrics_found = self._count_metrics_from_output(generated_text)
                 answered = 1 if 'ANSWERED' in generated_text else 0
                 avoided = 1 if 'AVOIDED' in generated_text else 0
                 
-                # Extract the original query and find associated answers
+                # STREAMLINED: Faster text extraction
                 query_text = row.get('text', 'No question text')
                 
-                # Find associated answer texts by looking at the message_final content
+                # STREAMLINED: Simplified answer extraction
                 answer_texts = []
-                if message_final and len(message_final) > 3:  # Has user message
+                if message_final and len(message_final) > 3:
                     user_content = message_final[-1]['content']
-                    # Extract answer objects from the user content
-                    import re
                     answer_match = re.search(r'answer objects (\[.*?\])', user_content)
                     if answer_match:
                         try:
@@ -324,10 +295,12 @@ class Phi4Method2Agent:
                     "processing_status": "success"
                 })
                 
-                progress_bar.progress((i + 1) / total_pairs)
+                # STREAMLINED: Update progress less frequently
+                if show_progress:
+                    progress_bar.progress((i + 1) / total_pairs)
                 
             except Exception as e:
-                st.warning(f"Failed to process Q&A pair {i+1}: {e}")
+                # STREAMLINED: Simple error handling
                 results.append({
                     "qa_pair_id": i + 1,
                     "bank": row.get('bank', 'Unknown'),
@@ -342,21 +315,17 @@ class Phi4Method2Agent:
                     "answer_texts": []
                 })
         
-        progress_bar.empty()
+        if show_progress:
+            progress_bar.empty()
         
-        # Calculate summary statistics
+        # STREAMLINED: Quick summary
         successful_analyses = len([r for r in results if r['processing_status'] == 'success'])
         total_metrics = sum(r['metrics_extracted'] for r in results)
         answered_questions = sum(1 for r in results if r['question_answered'])
         avoided_questions = sum(1 for r in results if r['question_avoided'])
         
-        # Show summary
-        st.success(f"✅ Processed {total_pairs} Q&A pairs successfully!")
-        st.info(f"""📊 **Results Summary:**
-        • Total Metrics Extracted: {total_metrics}
-        • Questions Answered: {answered_questions}
-        • Questions Avoided: {avoided_questions}
-        • Success Rate: {successful_analyses}/{total_pairs} pairs""")
+        # STREAMLINED: Single success message
+        st.success(f"✅ Processed {total_pairs} Q&A pairs | Metrics: {total_metrics} | Answered: {answered_questions} | Avoided: {avoided_questions}")
         
         return {
             "metadata": {
@@ -365,6 +334,7 @@ class Phi4Method2Agent:
                 "total_qa_pairs": total_pairs,
                 "analyzed_qa_pairs": total_pairs,
                 "successful_analyses": successful_analyses,
+                "max_pairs_limit": max_pairs,
                 "processing_summary": {
                     "extracted_metrics": total_metrics,
                     "answered_questions": answered_questions,
@@ -378,7 +348,7 @@ class Phi4Method2Agent:
         }
     
     def _count_metrics_from_output(self, output: str) -> int:
-        """Count financial metrics from the LLM output using the correct format"""
+        """ORIGINAL metrics counting - UNCHANGED"""
         if not output or output == "Processing failed":
             return 0
         

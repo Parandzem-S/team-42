@@ -100,6 +100,61 @@ st.markdown(f"""
         border-left: 3px solid #4CAF50;
         border-radius: 3px;
     }}
+    .qa-selection {{
+        background: linear-gradient(135deg, #43A047 0%, #66BB6A 100%);
+        padding: 1rem;
+        border-radius: 10px;
+        color: white;
+        margin: 1rem 0;
+        text-align: center;
+        font-weight: bold;
+    }}
+    .metric-detail-card {{
+        background: linear-gradient(135deg, #f0f8ff 0%, #e6f3ff 100%);
+        padding: 1.5rem;
+        border-radius: 15px;
+        border-left: 5px solid #4CAF50;
+        margin: 1rem 0;
+    }}
+    .metric-detail-header {{
+        margin-top: 0;
+        color: #1f4e79;
+        font-size: 1.2rem;
+    }}
+    .metric-grid {{
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 1rem;
+        margin: 1rem 0;
+    }}
+    .metric-item {{
+        background: #fff;
+        padding: 0.5rem 1rem;
+        border-radius: 8px;
+        border: 1px solid #ddd;
+    }}
+    .metric-status {{
+        background: #fff;
+        padding: 0.5rem 1rem;
+        border-radius: 8px;
+        border: 1px solid #ddd;
+        font-weight: bold;
+    }}
+    .status-success {{
+        background: #d4edda;
+        color: #155724;
+        border: 1px solid #c3e6cb;
+    }}
+    .status-error {{
+        background: #f8d7da;
+        color: #721c24;
+        border: 1px solid #f5c6cb;
+    }}
+    .status-warning {{
+        background: #fff3cd;
+        color: #856404;
+        border: 1px solid #ffeaa7;
+    }}
 </style>
 """, unsafe_allow_html=True)
 
@@ -130,6 +185,91 @@ if 'selected_years_display' not in st.session_state:
     st.session_state.selected_years_display = []
 if 'selected_quarters_display' not in st.session_state:
     st.session_state.selected_quarters_display = []
+# Q&A pair selection session state
+if 'selected_qa_pairs_method1' not in st.session_state:
+    st.session_state.selected_qa_pairs_method1 = None
+if 'selected_qa_pairs_method2' not in st.session_state:
+    st.session_state.selected_qa_pairs_method2 = None
+if 'available_qa_pairs_method1' not in st.session_state:
+    st.session_state.available_qa_pairs_method1 = 0
+if 'available_qa_pairs_method2' not in st.session_state:
+    st.session_state.available_qa_pairs_method2 = 0
+
+def count_qa_pairs_method1(df: pd.DataFrame) -> int:
+    """Count available Q&A pairs for Method 1 using the same logic as the analysis"""
+    if df is None or len(df) == 0:
+        return 0
+    
+    # Apply the same logic as in phi4_agent.py
+    df_copy = df.copy()
+    df_copy['Question No'] = pd.to_numeric(df_copy['Question No'], errors='coerce')
+    
+    # Filter for Q&A session only (presentation==0) and valid Question No
+    qa_session_data = df_copy[(df_copy['presentation'] == 0) & (df_copy['Question No'].notna())]
+    
+    if len(qa_session_data) == 0:
+        return 0
+    
+    # Group by Year, Quarter, Question No to get proper Q&A pairs
+    question_groups = qa_session_data.groupby(['Year', 'Quarter', 'Question No'])
+    
+    valid_pairs = 0
+    for (year, quarter, q_no), group in question_groups:
+        # Check if group has both questions and answers
+        questions = group[group['flag_question'] == True]
+        answers = group[group['flag_question'] == False]
+        
+        if len(questions) > 0 and len(answers) > 0:
+            valid_pairs += 1
+    
+    return valid_pairs
+
+def count_qa_pairs_method2(df: pd.DataFrame) -> int:
+    """Count available Q&A pairs for Method 2 using the same logic as the analysis"""
+    if df is None or len(df) == 0:
+        return 0
+    
+    # Filter only rows where type is not empty
+    df_messages = df[df['type'].notnull()].copy()
+    df_messages = df_messages.sort_index()
+    
+    if len(df_messages) == 0:
+        return 0
+    
+    # Count queries that have following answers (same logic as _create_message_prompts)
+    valid_pairs = 0
+    i = 0
+    
+    while i < len(df_messages):
+        current_row = df_messages.iloc[i]
+        
+        # Skip if not a query
+        if current_row['type'] != 'query':
+            i += 1
+            continue
+        
+        # Gather all consecutive answers that follow this query
+        j = i + 1
+        answer_count = 0
+        
+        while j < len(df_messages):
+            next_row = df_messages.iloc[j]
+            
+            if next_row['type'] == 'query':
+                break
+            elif next_row['type'] == 'answer':
+                answer_count += 1
+            
+            j += 1
+        
+        # Count as valid pair if we have at least one answer
+        if answer_count > 0:
+            valid_pairs += 1
+        
+        # Move to the next potential query
+        i = j if j < len(df_messages) else len(df_messages)
+    
+    return valid_pairs
 
 def initialize_phi4_agent_method1():
     """Initialize Phi-4 agent Method 1"""
@@ -225,6 +365,7 @@ def method_selection_sidebar():
 
 • Upload HSBC transcript PDFs directly
 • Extract Q&A data using PDF processing  
+• Select number of Q&A pairs for analysis
 • AI analysis focused on risk detection
 • Insight generation and answer coverage
 • Detailed transparency analysis""")
@@ -233,6 +374,7 @@ def method_selection_sidebar():
 
 • Pre-processed multi-bank transcript data access
 • Filter by bank, year, quarter (multi-select)
+• Select number of Q&A pairs for analysis
 • Detects and extracts financial metrics discussed
 • Captures metric values, trends (increase/decrease/stable)
 • Determines if questions were answered or avoided
@@ -458,50 +600,35 @@ def create_visualizations_method2(df):
         fig_timeline.update_layout(height=400)
         st.plotly_chart(fig_timeline, use_container_width=True)
 
-def save_analysis_results(results, method_name):
-    """Save analysis results to file"""
-    filename = f"analysis_results_{method_name}_{datetime.now().strftime('%Y%m%d_%H%M%S')}.json"
-    try:
-        with open(filename, 'w') as f:
-            json.dump(results, f, indent=2, default=str)
-        return filename
-    except Exception as e:
-        st.error(f"Failed to save results: {e}")
-        return None
-
-def run_phi4_analysis_method1(df):
+def run_phi4_analysis_method1(df, max_pairs=None):
     """Run Phi-4 Method 1 analysis on the data - LIVE ONLY"""
     if not initialize_phi4_agent_method1():
         return None
     
     st.markdown("### 🧠 AI Analysis with Phi-4 Method 1")
     
-    with st.spinner("🔍 Running live Phi-4 Method 1 AI analysis on Q&A data..."):
+    pairs_text = f" (processing {max_pairs} pairs)" if max_pairs else ""
+    with st.spinner(f"🔍 Running live Phi-4 Method 1 AI analysis on Q&A data{pairs_text}..."):
         try:
-            analysis_results = st.session_state.phi4_agent_method1.analyze_qa_data(df)
-            # Save results
-            filename = save_analysis_results(analysis_results, "method1")
-            if filename:
-                st.info(f"💾 Results saved to {filename}")
+            analysis_results = st.session_state.phi4_agent_method1.analyze_qa_data(df, max_pairs=max_pairs)
+            st.info("💾 Analysis completed and results stored in memory")
             return analysis_results
         except Exception as e:
             st.error(f"Phi-4 Method 1 analysis failed: {str(e)}")
             return None
 
-def run_phi4_analysis_method2(df):
+def run_phi4_analysis_method2(df, max_pairs=None):
     """Run Phi-4 Method 2 analysis on the data - LIVE ONLY"""
     if not initialize_phi4_agent_method2():
         return None
     
     st.markdown("### 🧠 AI Analysis with Phi-4 Method 2")
     
-    with st.spinner("🔍 Running live Phi-4 Method 2 AI analysis on multi-bank data..."):
+    pairs_text = f" (processing {max_pairs} pairs)" if max_pairs else ""
+    with st.spinner(f"🔍 Running live Phi-4 Method 2 AI analysis on multi-bank data{pairs_text}..."):
         try:
-            analysis_results = st.session_state.phi4_agent_method2.analyze_multibank_data(df)
-            # Save results
-            filename = save_analysis_results(analysis_results, "method2")
-            if filename:
-                st.info(f"💾 Results saved to {filename}")
+            analysis_results = st.session_state.phi4_agent_method2.analyze_multibank_data(df, max_pairs=max_pairs)
+            st.info("💾 Analysis completed and results stored in memory")
             return analysis_results
         except Exception as e:
             st.error(f"Phi-4 Method 2 analysis failed: {str(e)}")
@@ -601,7 +728,7 @@ def parse_method2_metrics(output_text):
     return metrics
 
 def display_analysis_results_method1(analysis_results):
-    """Display Phi-4 Method 1 analysis results - Show ALL pairs"""
+    """Display Phi-4 Method 1 analysis results - Adjusted based on selected pairs"""
     if not analysis_results:
         return
     
@@ -637,13 +764,32 @@ def display_analysis_results_method1(analysis_results):
         </div>
         """, unsafe_allow_html=True)
     
-    # Detailed results - Show MORE pairs, not just 5
+    # Detailed results - Show pairs based on what was actually processed
     if 'qa_analyses' in analysis_results:
         total_pairs = len(analysis_results['qa_analyses'])
-        st.markdown(f"#### 💡 Key Insights from {total_pairs} Q&A Pairs")
         
-        # Allow user to choose how many to display
-        max_display = st.slider("Number of Q&A pairs to display:", 5, min(50, total_pairs), 10)
+        # ADJUSTED: Use the number of pairs that were actually selected for analysis
+        selected_pairs_for_analysis = st.session_state.selected_qa_pairs_method1 or total_pairs
+        max_display_limit = min(selected_pairs_for_analysis, total_pairs)
+        
+        st.markdown(f"#### 💡 Key Insights from {total_pairs} Q&A Pairs (Selected: {selected_pairs_for_analysis})")
+        
+        # FIXED: Handle slider edge case when max_display_limit is 1
+        if max_display_limit > 1:
+            default_display = min(5, max_display_limit)
+            max_display = st.slider(
+                "Number of Q&A pairs to display:", 
+                min_value=1, 
+                max_value=max_display_limit, 
+                value=default_display,
+                help=f"Display up to {max_display_limit} pairs (limited by your selection of {selected_pairs_for_analysis} pairs for analysis)"
+            )
+        elif max_display_limit == 1:
+            max_display = 1
+            st.info(f"📊 Displaying the only available Q&A pair (from {selected_pairs_for_analysis} selected for analysis)")
+        else:
+            max_display = 0
+            st.warning("No Q&A pairs available to display.")
         
         for i, qa in enumerate(analysis_results['qa_analyses'][:max_display]):
             if qa.get('processing_status') == 'success':
@@ -670,7 +816,7 @@ def display_analysis_results_method1(analysis_results):
                             st.markdown(f"**Coverage:** {qa['extracted_results']['answer_coverage']}")
 
 def display_analysis_results_method2(analysis_results):
-    """Display Phi-4 Method 2 analysis results with formatted bullet points"""
+    """Display Phi-4 Method 2 analysis results with fixed HTML rendering"""
     if not analysis_results:
         return
     
@@ -709,13 +855,33 @@ def display_analysis_results_method2(analysis_results):
         </div>
         """, unsafe_allow_html=True)
     
-    # Detailed results with formatted metrics
+    # Detailed results - Show pairs based on what was actually processed
     if 'qa_analyses' in analysis_results:
         total_pairs = len(analysis_results['qa_analyses'])
-        st.markdown(f"#### 💡 Financial Metrics Analysis from {total_pairs} Q&A Pairs")
         
-        # Allow user to choose how many to display
-        max_display = st.slider("Number of Q&A pairs to display:", 5, min(50, total_pairs), 10, key="method2_slider")
+        # ADJUSTED: Use the number of pairs that were actually selected for analysis
+        selected_pairs_for_analysis = st.session_state.selected_qa_pairs_method2 or total_pairs
+        max_display_limit = min(selected_pairs_for_analysis, total_pairs)
+        
+        st.markdown(f"#### 💡 Financial Metrics Analysis from {total_pairs} Q&A Pairs (Selected: {selected_pairs_for_analysis})")
+        
+        # FIXED: Handle slider edge case when max_display_limit is 1
+        if max_display_limit > 1:
+            default_display = min(5, max_display_limit)
+            max_display = st.slider(
+                "Number of Q&A pairs to display:", 
+                min_value=1, 
+                max_value=max_display_limit, 
+                value=default_display, 
+                key="method2_slider",
+                help=f"Display up to {max_display_limit} pairs (limited by your selection of {selected_pairs_for_analysis} pairs for analysis)"
+            )
+        elif max_display_limit == 1:
+            max_display = 1
+            st.info(f"📊 Displaying the only available Q&A pair (from {selected_pairs_for_analysis} selected for analysis)")
+        else:
+            max_display = 0
+            st.warning("No Q&A pairs available to display.")
         
         for i, qa in enumerate(analysis_results['qa_analyses'][:max_display]):
             if qa.get('processing_status') == 'success':
@@ -771,77 +937,46 @@ def display_analysis_results_method2(analysis_results):
                                     st.metric("Avoided", avoided_count, delta=None)
                             
                             else:
-                                # Show details for selected metric
+                                # Show details for selected metric - FIXED: Use st components instead of HTML
                                 selected_idx = int(selected_option.split('.')[0].replace('📊', '').strip()) - 1
                                 selected_metric = metrics[selected_idx]
                                 
-                                # Create color coding for trends and status
-                                trend = selected_metric.get('trend', 'NO TRAJECTORY')
-                                if trend.upper() in ['INCREASE', 'UP', 'GROW', 'ABOVE']:
-                                    trend_color = "🟢"
-                                    trend_delta = "positive"
-                                elif trend.upper() in ['DECREASE', 'DOWN', 'DECLINE', 'BELOW']:
-                                    trend_color = "🔴"
-                                    trend_delta = "negative"
-                                elif trend.upper() in ['STABLE', 'FLAT', 'MAINTAIN']:
-                                    trend_color = "🔵"
-                                    trend_delta = "off"
-                                else:
-                                    trend_color = "⚪"
-                                    trend_delta = "off"
+                                # Display selected metric details using Streamlit components
+                                st.markdown(f"#### 📊 {selected_metric['metric']}")
                                 
+                                # Create columns for the grid layout
+                                detail_col1, detail_col2 = st.columns(2)
+                                
+                                with detail_col1:
+                                    st.markdown("**💰 Level:**")
+                                    st.info(selected_metric['level'])
+                                
+                                with detail_col2:
+                                    # Color coding for trends
+                                    trend = selected_metric.get('trend', 'NO TRAJECTORY')
+                                    if trend.upper() in ['INCREASE', 'UP', 'GROW', 'ABOVE']:
+                                        trend_color = "🟢"
+                                    elif trend.upper() in ['DECREASE', 'DOWN', 'DECLINE', 'BELOW']:
+                                        trend_color = "🔴"
+                                    elif trend.upper() in ['STABLE', 'FLAT', 'MAINTAIN']:
+                                        trend_color = "🔵"
+                                    else:
+                                        trend_color = "⚪"
+                                    
+                                    st.markdown(f"**{trend_color} Trend:**")
+                                    st.info(trend)
+                                
+                                # Answer status
                                 status = selected_metric.get('status', 'UNCLEAR')
                                 if status.upper() == 'ANSWERED':
                                     status_color = "✅"
-                                    status_bg = "success"
+                                    st.success(f"**{status_color} Answer Status:** {status}")
                                 elif status.upper() in ['AVOIDED', 'NOT ANSWERED']:
                                     status_color = "❌"
-                                    status_bg = "error"
+                                    st.error(f"**{status_color} Answer Status:** {status}")
                                 else:
                                     status_color = "❓"
-                                    status_bg = "warning"
-                                
-                                # Display selected metric details in a nice format
-                                st.markdown(f"""
-                                <div style="
-                                    background: linear-gradient(135deg, #f0f8ff 0%, #e6f3ff 100%);
-                                    padding: 1.5rem;
-                                    border-radius: 15px;
-                                    border-left: 5px solid #4CAF50;
-                                    margin: 1rem 0;
-                                ">
-                                    <h4 style="margin-top: 0; color: #1f4e79;">📊 {selected_metric['metric']}</h4>
-                                    
-                                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; margin: 1rem 0;">
-                                        <div>
-                                            <strong>💰 Level:</strong><br>
-                                            <span style="background: #fff; padding: 0.3rem 0.8rem; border-radius: 8px; border: 1px solid #ddd;">
-                                                {selected_metric['level']}
-                                            </span>
-                                        </div>
-                                        <div>
-                                            <strong>{trend_color} Trend:</strong><br>
-                                            <span style="background: #fff; padding: 0.3rem 0.8rem; border-radius: 8px; border: 1px solid #ddd;">
-                                                {trend}
-                                            </span>
-                                        </div>
-                                    </div>
-                                    
-                                    <div style="margin-top: 1rem;">
-                                        <strong>{status_color} Answer Status:</strong><br>
-                                        <span style="
-                                            background: {'#d4edda' if status_bg == 'success' else '#f8d7da' if status_bg == 'error' else '#fff3cd'};
-                                            color: {'#155724' if status_bg == 'success' else '#721c24' if status_bg == 'error' else '#856404'};
-                                            padding: 0.3rem 0.8rem;
-                                            border-radius: 8px;
-                                            border: 1px solid {'#c3e6cb' if status_bg == 'success' else '#f5c6cb' if status_bg == 'error' else '#ffeaa7'};
-                                            font-weight: bold;
-                                        ">
-                                            {status}
-                                        </span>
-                                    </div>
-                                </div>
-                                """, unsafe_allow_html=True)
+                                    st.warning(f"**{status_color} Answer Status:** {status}")
                             
                             # Always show raw output in collapsible section for reference
                             with st.expander(f"🔍 Raw AI Output ({len(metrics)} metrics parsed)"):
@@ -960,17 +1095,65 @@ def method1_sidebar():
             df = process_uploaded_files(uploaded_files)
             if df is not None:
                 st.session_state.processed_data_method1 = df
+                
+                # Count available Q&A pairs
+                qa_pairs_count = count_qa_pairs_method1(df)
+                st.session_state.available_qa_pairs_method1 = qa_pairs_count
+                
+                # Reset selected pairs when new data is processed
+                st.session_state.selected_qa_pairs_method1 = None
+                
                 st.success(f"✅ Phi-4 Method 1: Processed {len(df):,} records from {len(uploaded_files)} files")
+                st.info(f"📊 Found {qa_pairs_count} Q&A pairs available for analysis")
             else:
                 st.error("❌ No data could be extracted from the files")
     
-    # Analysis controls
-    if st.session_state.processed_data_method1 is not None:
+    # Q&A pair selection for Method 1
+    if st.session_state.processed_data_method1 is not None and st.session_state.available_qa_pairs_method1 > 0:
         st.markdown("---")
-        if st.button("🧠 Run Phi-4 Method 1 AI Analysis", key="run_method1_analysis"):
-            analysis_results = run_phi4_analysis_method1(st.session_state.processed_data_method1)
-            if analysis_results:
-                st.session_state.analysis_results_method1 = analysis_results
+        st.markdown("### 📊 Q&A Pair Selection")
+        
+        max_pairs = st.session_state.available_qa_pairs_method1
+        
+        # Display current selection info
+        st.markdown(f"""
+        <div class="qa-selection">
+            📋 <strong>Available Q&A Pairs:</strong> {max_pairs} pairs ready for analysis
+        </div>
+        """, unsafe_allow_html=True)
+        
+        # FIXED: Handle slider edge case when max_pairs is 1
+        if max_pairs > 1:
+            selected_pairs = st.slider(
+                "Select number of Q&A pairs to analyze:",
+                min_value=1,
+                max_value=max_pairs,
+                value=min(10, max_pairs),
+                help=f"Choose how many Q&A pairs (out of {max_pairs} available) to process with the AI model"
+            )
+        elif max_pairs == 1:
+            selected_pairs = 1
+            st.info(f"📊 Only 1 Q&A pair available - will analyze this pair")
+        else:
+            selected_pairs = 0
+            st.warning("No Q&A pairs available for analysis")
+        
+        st.session_state.selected_qa_pairs_method1 = selected_pairs if selected_pairs > 0 else None
+        
+        # Show selection summary and analysis button only if we have pairs
+        if selected_pairs > 0:
+            st.info(f"🎯 **Selected for Analysis:** {selected_pairs} out of {max_pairs} Q&A pairs")
+            
+            # Analysis button
+            if st.button("🧠 Run Phi-4 Method 1 AI Analysis", key="run_method1_analysis"):
+                analysis_results = run_phi4_analysis_method1(
+                    st.session_state.processed_data_method1,
+                    max_pairs=selected_pairs
+                )
+                if analysis_results:
+                    st.session_state.analysis_results_method1 = analysis_results
+        else:
+            st.warning("⚠️ No Q&A pairs available for analysis")
 
 def get_filtered_options(selected_banks, selected_years, df_sample):
     """Get filtered year and quarter options based on selected banks and years (cascading)"""
@@ -1089,8 +1272,6 @@ def method2_sidebar():
             else:
                 # Manual cache clearing if method doesn't exist
                 st.session_state.multi_bank_extractor = None
-                if os.path.exists("all_banks_transcript_split.xlsx"):
-                    os.remove("all_banks_transcript_split.xlsx")
                 st.success("✅ Cache cleared manually!")
             
             st.session_state.processed_data_method2 = None
@@ -1142,6 +1323,13 @@ def method2_sidebar():
                     if df is not None and len(df) > 0:
                         st.session_state.processed_data_method2 = df
                         
+                        # Count available Q&A pairs
+                        qa_pairs_count = count_qa_pairs_method2(df)
+                        st.session_state.available_qa_pairs_method2 = qa_pairs_count
+                        
+                        # Reset selected pairs when new data is processed
+                        st.session_state.selected_qa_pairs_method2 = None
+                        
                         # Store selection for display in other tabs
                         st.session_state.selected_banks_display = selected_banks
                         st.session_state.selected_years_display = selected_years
@@ -1160,7 +1348,7 @@ def method2_sidebar():
                         query_count = len(df[df['type'] == 'query']) if 'type' in df.columns else 0
                         answer_count = len(df[df['type'] == 'answer']) if 'type' in df.columns else 0
                         
-                        st.success(f"✅ Phi-4 Method 2: Processed {len(df):,} records\n\n**Selection:**\n• Banks: {banks_str}\n• Years: {years_str}\n• Quarters: {quarters_str}\n\n**Q&A Data:**\n• {query_count} Questions\n• {answer_count} Answers")
+                        st.success(f"✅ Phi-4 Method 2: Processed {len(df):,} records\n\n**Selection:**\n• Banks: {banks_str}\n• Years: {years_str}\n• Quarters: {quarters_str}\n\n**Q&A Data:**\n• {query_count} Questions\n• {answer_count} Answers\n• {qa_pairs_count} Q&A Pairs Available")
                         
                         # Clear progress indicators
                         progress_bar.empty()
@@ -1177,25 +1365,66 @@ def method2_sidebar():
                     if "status_text" in locals():
                         status_text.empty()
     
-    # Analysis controls
-    if st.session_state.processed_data_method2 is not None:
+    # Q&A pair selection for Method 2
+    if st.session_state.processed_data_method2 is not None and st.session_state.available_qa_pairs_method2 > 0:
         st.markdown("---")
+        st.markdown("### 📊 Q&A Pair Selection")
         
-        # Show model status
-        if st.session_state.phi4_method2_model_cache is not None:
-            st.success("🤖 Phi-4 Method 2 model is cached and ready!")
-        elif st.session_state.phi4_agent_method2 is not None and st.session_state.phi4_agent_method2.model_loaded:
-            st.info("🤖 Phi-4 Method 2 model is loaded and ready!")
+        max_pairs = st.session_state.available_qa_pairs_method2
+        
+        # Display current selection info
+        st.markdown(f"""
+        <div class="qa-selection">
+            📋 <strong>Available Q&A Pairs:</strong> {max_pairs} pairs ready for analysis
+        </div>
+        """, unsafe_allow_html=True)
+        
+        # FIXED: Handle slider edge case when max_pairs is 1
+        if max_pairs > 1:
+            selected_pairs = st.slider(
+                "Select number of Q&A pairs to analyze:",
+                min_value=1,
+                max_value=max_pairs,
+                value=min(10, max_pairs),
+                help=f"Choose how many Q&A pairs (out of {max_pairs} available) to process with the AI model",
+                key="method2_qa_pairs_slider"
+            )
+        elif max_pairs == 1:
+            selected_pairs = 1
+            st.info(f"📊 Only 1 Q&A pair available - will analyze this pair")
         else:
-            st.info("🤖 Phi-4 Method 2 model will load when analysis starts (first time only)")
+            selected_pairs = 0
+            st.warning("No Q&A pairs available for analysis")
         
-        if st.button("🧠 Run Phi-4 Method 2 AI Analysis", key="run_method2_analysis"):
-            analysis_results = run_phi4_analysis_method2(st.session_state.processed_data_method2)
-            if analysis_results:
-                st.session_state.analysis_results_method2 = analysis_results
+        st.session_state.selected_qa_pairs_method2 = selected_pairs if selected_pairs > 0 else None
+        
+        # Show selection summary and analysis button only if we have pairs
+        if selected_pairs > 0:
+            st.info(f"🎯 **Selected for Analysis:** {selected_pairs} out of {max_pairs} Q&A pairs")
+            
+            # Analysis button
+            st.markdown("---")
+            
+            # Show model status
+            if st.session_state.phi4_method2_model_cache is not None:
+                st.success("🤖 Phi-4 Method 2 model is cached and ready!")
+            elif st.session_state.phi4_agent_method2 is not None and st.session_state.phi4_agent_method2.model_loaded:
+                st.info("🤖 Phi-4 Method 2 model is loaded and ready!")
+            else:
+                st.info("🤖 Phi-4 Method 2 model will load when analysis starts (first time only)")
+            
+            if st.button("🧠 Run Phi-4 Method 2 AI Analysis", key="run_method2_analysis"):
+                analysis_results = run_phi4_analysis_method2(
+                    st.session_state.processed_data_method2,
+                    max_pairs=selected_pairs
+                )
+                if analysis_results:
+                    st.session_state.analysis_results_method2 = analysis_results
+        else:
+            st.warning("⚠️ No Q&A pairs available for analysis")
 
 def export_section():
-    """Export options for current method"""
+    """Export options for current method - In-memory only"""
     st.markdown("---")
     st.markdown("### 💾 Export Options")
     
@@ -1306,7 +1535,15 @@ def main():
                 else:
                     display_analysis_results_method2(current_analysis)
             else:
-                st.info(f"👆 Click 'Run {method_display} AI Analysis' in the sidebar to generate live insights")
+                # Show Q&A pair selection info if available
+                if st.session_state.selected_method == "method1" and st.session_state.available_qa_pairs_method1 > 0:
+                    selected_pairs = st.session_state.selected_qa_pairs_method1 or "not selected"
+                    st.info(f"👆 Click 'Run {method_display} AI Analysis' in the sidebar to generate live insights\n\n📊 Available Q&A pairs: {st.session_state.available_qa_pairs_method1}\n🎯 Selected for analysis: {selected_pairs}")
+                elif st.session_state.selected_method == "method2" and st.session_state.available_qa_pairs_method2 > 0:
+                    selected_pairs = st.session_state.selected_qa_pairs_method2 or "not selected"
+                    st.info(f"👆 Click 'Run {method_display} AI Analysis' in the sidebar to generate live insights\n\n📊 Available Q&A pairs: {st.session_state.available_qa_pairs_method2}\n🎯 Selected for analysis: {selected_pairs}")
+                else:
+                    st.info(f"👆 Click 'Run {method_display} AI Analysis' in the sidebar to generate live insights")
         
         with tab4:
             chat_interface()
@@ -1323,6 +1560,7 @@ def main():
         **📄 Phi-4 Method 1 - HSBC PDF Processor:**
         • Upload HSBC transcript PDFs directly
         • Extract Q&A data using advanced PDF processing
+        • **NEW:** Select number of Q&A pairs for AI analysis
         • AI analysis focused on risk detection and insights
         • Detailed answer coverage evaluation
         • Comprehensive transparency analysis
@@ -1330,6 +1568,7 @@ def main():
         **🏦 Phi-4 Method 2 - Multi-Bank Financial Metrics Extractor:**
         • Access pre-processed multi-bank transcript data
         • Filter by specific banks, years, and quarters (multi-select supported)
+        • **NEW:** Select number of Q&A pairs for AI analysis
         • Detects and extracts financial metrics discussed in transcripts
         • Captures metric values, trends (increase/decrease/stable), and status
         • Determines if questions were answered or avoided by management
@@ -1337,18 +1576,21 @@ def main():
         
         **🔥 Live Analysis Features:**
         • 🧠 **Real-time AI Processing**: All analysis runs live using Phi-4 models
+        • 📊 **Customizable Analysis**: Choose how many Q&A pairs to process
         • 💬 **Interactive Chat**: Ask questions about your data using natural language
         • 📊 **Rich Visualizations**: Method-specific charts and graphs with bank context
         • 💾 **Export Options**: Download processed data and analysis results
         • 🔄 **Flexible Processing**: Switch between methods seamlessly in the sidebar
         • ⚡ **Performance Optimized**: Fast data loading and instant method switching
+        • 💾 **In-Memory Only**: No local files saved during operation
         
         **Get Started:**
         1. Select your preferred method in the sidebar (larger buttons for easy selection)
         2. Use the method-specific controls to upload files or select filters
         3. Process your data with progress tracking
-        4. Run live AI analysis for comprehensive insights
-        5. Explore your data and chat with the AI
+        4. **NEW:** Select how many Q&A pairs to analyze for optimal performance
+        5. Run live AI analysis for comprehensive insights
+        6. Explore your data and chat with the AI
         
         ---
         **About the Technology:**
@@ -1358,6 +1600,7 @@ def main():
         • Optimized for performance with caching and lazy loading
         • All AI processing happens live - no pre-computed results
         • No data leaves your environment (when run locally)
+        • No local files saved during operation
         
         **Team 42 - Cambridge University & Bank of England Collaboration**
         """)
