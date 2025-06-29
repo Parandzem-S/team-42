@@ -1,4 +1,5 @@
-# This file contains YOUR EXACT Phi-4 code from paste-2.txt
+# This file contains YOUR EXACT Phi-4 code from paste-2.txt with Q&A pair selection
+# UPDATED: Removed local file saving functionality
 
 import warnings
 warnings.filterwarnings("ignore")
@@ -15,7 +16,8 @@ from typing import Dict, List, Any, Optional
 
 class Phi4BankingAgent:
     """
-    YOUR EXACT Phi-4 banking agent code from paste-2.txt
+    YOUR EXACT Phi-4 banking agent code from paste-2.txt with Q&A pair limit functionality
+    UPDATED: No local file saving, operates in-memory only
     """
     
     def __init__(self):
@@ -168,9 +170,10 @@ Analysis:"""
         
         return "Unclear"
 
-    def analyze_qa_data(self, df: pd.DataFrame) -> Dict[str, Any]:
+    def analyze_qa_data(self, df: pd.DataFrame, max_pairs: Optional[int] = None) -> Dict[str, Any]:
         """
-        YOUR EXACT Q&A analysis logic from paste-2.txt
+        YOUR EXACT Q&A analysis logic from paste-2.txt with Q&A pair limit functionality
+        UPDATED: No local file saving, returns results in-memory only
         """
         print("Extracting Q&A pairs based on Year, Quarter, Question No grouping (Q&A session only)...")
 
@@ -217,7 +220,16 @@ Analysis:"""
                 "question_no": q_no
             })
 
-        print(f"Found {len(qa_pairs)} Q&A pairs from Q&A session only (presentation==0)")
+        total_available_pairs = len(qa_pairs)
+        print(f"Found {total_available_pairs} Q&A pairs from Q&A session only (presentation==0)")
+
+        # NEW: Apply max_pairs limit if specified
+        if max_pairs is not None and max_pairs < len(qa_pairs):
+            print(f"Limiting analysis to first {max_pairs} out of {total_available_pairs} Q&A pairs")
+            qa_pairs = qa_pairs[:max_pairs]
+        
+        pairs_to_process = len(qa_pairs)
+        print(f"Processing {pairs_to_process} Q&A pairs")
 
         # Build prompts - YOUR CODE
         prompts = []
@@ -318,15 +330,16 @@ Analysis:"""
 
         # Summary statistics
         print("\n=== PROCESSING SUMMARY ===")
-        print(f"Total Q&A pairs processed: {len(qa_pairs)}")
+        print(f"Total Q&A pairs available: {total_available_pairs}")
+        print(f"Q&A pairs processed: {pairs_to_process}")
         successful_analyses = len([o for o in outputs_all if o != 'Processing failed'])
         print(f"Successful analyses: {successful_analyses}")
         print(f"Pairs with valid insights: {valid_insight_pairs}")
         print(f"Risk detected in: {risk_detected_pairs} pairs")
         print(f"Fully answered: {fully_answered_pairs} pairs")
 
-        # YOUR EXACT JSON output creation
-        print("\nCreating JSON output...")
+        # YOUR EXACT JSON output creation - UPDATED: Return in-memory only, no file saving
+        print("\nCreating in-memory results...")
 
         def safe_convert(obj):
             """Convert all data types to JSON-safe types"""
@@ -346,7 +359,8 @@ Analysis:"""
             "metadata": {
                 "processing_date": datetime.now().isoformat(),
                 "model_used": "microsoft/Phi-4-mini-instruct",
-                "total_qa_pairs": len(qa_pairs),
+                "total_qa_pairs_available": total_available_pairs,
+                "total_qa_pairs": pairs_to_process,
                 "successful_analyses": successful_analyses,
                 "processing_summary": {
                     "pairs_with_valid_insights": valid_insight_pairs,
@@ -380,7 +394,9 @@ Analysis:"""
             }
             json_output["qa_analyses"].append(qa_analysis)
 
-        # Return results for Streamlit
+        print("Results stored in memory successfully!")
+
+        # Return results for Streamlit - IN-MEMORY ONLY
         return {
             "metadata": json_output["metadata"],
             "qa_analyses": json_output["qa_analyses"],
