@@ -23,7 +23,7 @@ This repository features tools and applications for extracting, processing, and 
 ## 🏗️ Project Structure
 
 ```
-AI Streamlit App on HuggingFace/
+team-42/
 ├── AI Streamlit App on HuggingFace/    # Streamlit-based front-end app & model integration
 ├── Deutsche_Bank/                      # Deutsche Bank processing scripts & data
 ├── Final Codes/                        # Consolidated/cleaned Jupyter notebooks for data processing
